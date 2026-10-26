@@ -124,22 +124,39 @@ export async function waitForOpenCode(maxWaitMs = 90000) {
       );
     }
     try {
-      const res = await fetch(url, { headers: { Authorization: auth } });
+      // Bound each probe: fetch can otherwise remain pending after the TCP
+      // connection succeeds, preventing the outer maxWaitMs deadline from
+      // being checked and making a 120s timeout appear several minutes late.
+      const res = await fetch(url, {
+        headers: { Authorization: auth },
+        signal: AbortSignal.timeout(3000),
+      });
       if (res.ok) {
-        const body = await res.json();
+        let body = {};
+        try { body = await res.json(); } catch { /* health body may be empty */ }
         logger.info(`OpenCode ready (version=${body.version || 'unknown'})`);
         ready = true;
         return true;
       }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`OpenCode health endpoint rejected Basic authentication (HTTP ${res.status}); check OPENCODE_SERVER_USERNAME and OPENCODE_SERVER_PASSWORD.`);
+      }
+      if (res.status === 404) {
+        throw new Error(`OpenCode health endpoint returned HTTP 404 at ${url}; verify the installed OpenCode API/version.`);
+      }
       if (attempt === 1 || attempt % 10 === 0) {
-        logger.info(`OpenCode health HTTP ${res.status} (attempt ${attempt})`);
+        logger.info(`OpenCode health HTTP ${res.status} (attempt ${attempt}, waited=${Date.now() - start}ms)`);
       }
     } catch (err) {
+      if (/rejected Basic authentication|health endpoint returned HTTP 404/.test(err.message)) throw err;
       if (attempt === 1 || attempt % 10 === 0) {
         const alive = proc && proc.exitCode === null && !proc.killed;
+        const reason = err.name === 'TimeoutError' || err.name === 'AbortError'
+          ? 'request-timeout'
+          : (err.cause?.code || err.message);
         logger.info(
           `OpenCode not reachable yet (attempt ${attempt}, alive=${Boolean(alive)}, ` +
-          `waited=${Date.now() - start}ms): ${err.cause?.code || err.message}`
+          `waited=${Date.now() - start}ms): ${reason}`
         );
       }
     }
