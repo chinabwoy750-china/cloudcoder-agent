@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: universal-modder
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLOUDCODER_USERNAME
+        sync: false
+      - key: CLOUDCODER_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: OPENCODE_SERVER_USERNAME
+        value: opencode
+      - key: OPENCODE_SERVER_PASSWORD
+        generateValue: true
+      - key: DEFAULT_MODEL
+        value: china-gpt/dahl/MiniMaxAI/MiniMax-M2.7
+      - key: CUSTOM_AI_BASE_URL
+        value: https://gpt-china.onrender.com/v1
+      - key: CUSTOM_AI_API_KEY
+        sync: false
+      - key: CUSTOM_AI_PROVIDER
+        value: china-gpt
+      - key: CUSTOM_AI_MODEL
+        value: dahl/MiniMaxAI/MiniMax-M2.7
+      - key: CUSTOM_AI_MODEL_NAME
+        value: MiniMax M2.7
+      - key: CUSTOM_AI_PROVIDER_NAME
+        value: China-GPT
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_ALLOW_DEFAULT_BRANCH
+        value: "false"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ALLOWED_USER_IDS
+        sync: false
+      - key: WORKSPACE_ROOT
+        value: /tmp/cloudcoder
+      - key: LOG_LEVEL
+        value: info

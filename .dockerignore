@@ -1,0 +1,8 @@
+node_modules
+.git
+.env
+*.log
+tests
+docs
+README.md
+render.yaml

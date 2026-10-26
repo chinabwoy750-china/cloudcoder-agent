@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#08090d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Universal Modder — AI Web App Studio</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login" class="login hidden">
+  <div class="login-bg" aria-hidden="true"></div>
+  <form id="login-form" class="login-card">
+    <div class="login-brand">
+      <div class="logo-mark">
+        <svg viewBox="0 0 32 32" width="26" height="26" fill="none">
+          <defs>
+            <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7c9eff"/>
+              <stop offset="1" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+          <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1>Universal Modder</h1>
+      <p class="muted">Import, modify and improve web apps with AI</p>
+    </div>
+    <label class="field">
+      <span>Username</span>
+      <input id="login-user" name="username" autocomplete="username" required />
+    </label>
+    <label class="field">
+      <span>Password</span>
+      <input id="login-pass" name="password" type="password" autocomplete="current-password" required />
+    </label>
+    <button type="submit" id="login-btn" class="primary-btn">
+      <span>Sign in</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+    </button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="app hidden">
+  <div id="scrim" class="scrim" hidden></div>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="sidebar">
+    <header class="sidebar-head">
+      <div class="brand">
+        <div class="logo-mark sm">
+          <svg viewBox="0 0 32 32" width="20" height="20" fill="none">
+            <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span>Universal Modder</span>
+      </div>
+      <button id="sidebar-close" class="icon-btn mobile-only" aria-label="Close menu" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <button id="new-task-btn" class="new-task-btn" type="button">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <span>New task</span>
+    </button>
+
+    <nav class="nav" aria-label="Primary">
+      <button class="nav-btn active" data-view="chat" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Chat</span>
+      </button>
+      <button class="nav-btn" data-view="repos" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <span>Repositories</span>
+      </button>
+      <button class="nav-btn" data-view="files" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Files</span>
+      </button>
+      <button class="nav-btn" data-view="settings" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <section class="side-section">
+      <div class="side-head">
+        <h2>Workspaces</h2>
+      </div>
+      <ul id="workspace-list" class="list"></ul>
+      <button id="new-workspace" class="ghost-btn full" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>New workspace</span>
+      </button>
+    </section>
+
+    <footer class="sidebar-foot">
+      <div class="status-line">
+        <span id="conn-dot" class="dot ok" aria-hidden="true"></span>
+        <span id="conn-label" class="muted small">connected</span>
+      </div>
+    </footer>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <button id="menu-btn" class="icon-btn mobile-only" aria-label="Menu" type="button">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <div class="topbar-title">
+        <span class="brand-mobile">Universal Modder</span>
+        <span class="ws-pill" id="ws-pill" hidden></span>
+      </div>
+      <button id="inspector-btn" class="icon-btn mobile-only" aria-label="Workspace panel" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+      </button>
+    </header>
+
+    <!-- CHAT -->
+    <section id="view-chat" class="view">
+      <div id="messages" class="messages" aria-live="polite">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">
+            <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
+              <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 id="empty-title">Select a workspace first</h3>
+          <p id="empty-copy">Import a web app from GitHub or ZIP, then ask Universal Modder to inspect, fix, redesign, refactor or test it.</p>
+          <div class="suggestions" id="suggestions">
+            <button class="suggestion" type="button" data-prompt="Summarize this project's structure and stack.">Summarize this project</button>
+            <button class="suggestion" type="button" data-prompt="Find bugs in this project and propose fixes.">Find bugs</button>
+            <button class="suggestion" type="button" data-prompt="Run the tests and report any failures.">Run the tests</button>
+            <button class="suggestion" type="button" data-prompt="Explain the architecture and key files.">Explain the architecture</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <form id="composer" class="composer" autocomplete="off">
+          <div class="composer-inner">
+            <textarea id="prompt" placeholder="Select a workspace to start…" rows="1" required disabled></textarea>
+            <div class="composer-bar">
+              <div class="composer-left">
+                <button type="button" id="attach-btn" class="icon-btn-sm" title="Attach files" aria-label="Attach files">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <input id="attach-input" type="file" multiple hidden />
+                <div class="select-wrap">
+                  <select id="model-select" aria-label="Model">
+                    <option value="">default model</option>
+                  </select>
+                  <svg class="select-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+              </div>
+              <div class="composer-right">
+                <button type="button" id="cancel-btn" class="cancel-btn hidden" aria-label="Cancel task">Cancel</button>
+                <button type="submit" id="send-btn" class="send-btn" aria-label="Send" disabled>
+                  <span class="send-label">Send</span>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="composer-hint">
+            <span class="kbd-hint">Enter to send · Shift+Enter for new line</span>
+            <span id="char-count" class="char-count" hidden>0</span>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- REPOS -->
+    <section id="view-repos" class="view hidden">
+      <div class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Repositories</h2>
+            <p class="muted small">Clone any repo into a fresh, isolated workspace</p>
+          </div>
+          <button id="refresh-repos" class="ghost-btn" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>Refresh</span>
+          </button>
+        </header>
+        <ul id="repo-list" class="list"></ul>
+      </div>
+    </section>
+
+    <!-- FILES -->
+    <section id="view-files" class="view hidden">
+      <div class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Files</h2>
+            <p class="muted small">Browse, upload and download project files</p>
+          </div>
+          <div class="row wrap">
+            <button id="upload-files" class="ghost-btn" type="button">Upload</button>
+            <button id="upload-zip" class="ghost-btn" type="button">Upload ZIP</button>
+            <button id="download-zip" class="ghost-btn accent-ghost" type="button">Download ZIP</button>
+          </div>
+        </header>
+        <ul id="file-list" class="list"></ul>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view hidden">
+      <div class="panel">
+        <header class="panel-head">
+          <div>
+            <h2>Settings</h2>
+            <p class="muted small">Session and account</p>
+          </div>
+        </header>
+        <div class="settings-group">
+          <h3>Preferred model</h3>
+          <p class="muted small">Your selection is remembered on this device. Options come from the configured endpoint.</p>
+          <div class="select-wrap wide">
+            <select id="settings-model" aria-label="Preferred model">
+              <option value="">default model</option>
+            </select>
+            <svg class="select-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <dl id="model-meta" class="kv model-meta">
+            <dt>Default</dt><dd id="meta-default">—</dd>
+            <dt>Discovery</dt><dd id="meta-source">—</dd>
+            <dt>OpenCode</dt><dd id="meta-opencode">—</dd>
+            <dt>Note</dt><dd id="meta-error">—</dd>
+          </dl>
+        </div>
+        <div class="settings-group">
+          <h3>Account</h3>
+          <p class="muted small">Sign out of this browser.</p>
+          <button id="logout-btn" class="danger-btn" type="button">Sign out</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- INSPECTOR -->
+  <aside id="inspector" class="inspector">
+    <header class="inspector-head">
+      <h2>Workspace</h2>
+      <button id="inspector-close" class="icon-btn mobile-only" aria-label="Close panel" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="ws-card">
+      <dl id="ws-info" class="kv"></dl>
+    </div>
+
+    <section class="inspector-section">
+      <div class="inspector-section-head">
+        <h3>Changed files</h3>
+      </div>
+      <ul id="changed-list" class="list small"></ul>
+    </section>
+
+    <section class="inspector-section">
+      <div class="inspector-section-head">
+        <h3>Actions</h3>
+      </div>
+      <div class="row wrap">
+        <button id="btn-diff" class="ghost-btn" type="button">Diff</button>
+        <button id="btn-test" class="ghost-btn" type="button">Run tests</button>
+        <button id="btn-build" class="ghost-btn" type="button">Build</button>
+      </div>
+    </section>
+
+    <section class="inspector-section">
+      <div class="inspector-section-head">
+        <h3>Output</h3>
+        <button id="clear-terminal" class="icon-btn-xs" type="button" aria-label="Clear output">✕</button>
+      </div>
+      <pre id="terminal" class="terminal" aria-live="polite"></pre>
+    </section>
+  </aside>
+</div>
+
+<div id="toasts" class="toasts" aria-live="assertive"></div>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

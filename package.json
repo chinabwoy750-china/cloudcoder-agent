@@ -1,0 +1,21 @@
+{
+  "name": "universal-modder",
+  "version": "1.0.0",
+  "description": "AI web-app modification studio powered by OpenCode, GitHub and ZIP imports",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/*.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.3",
+    "multer": "^2.0.2",
+    "octokit": "^4.1.2",
+    "simple-git": "^3.27.0",
+    "yauzl": "^3.2.0"
+  }
+}
