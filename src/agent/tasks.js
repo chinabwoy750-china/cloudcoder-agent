@@ -20,14 +20,13 @@ export async function runAgentTask({ directory, prompt, model, mode = 'fast', on
   onEvent({ type: 'session', sessionId, directory });
 
   // Optional plan-then-act prefix (still a single OpenCode prompt — not a second engine).
-  const planOn = mode === 'thorough' || (mode !== 'fast' && String(process.env.PLAN_THEN_ACT || 'false').toLowerCase() === 'true');
-  const planPrefix = planOn
-    ? (
-      'Before making changes, briefly outline a short plan (3–6 bullets), ' +
-      'then execute it in the workspace, then summarize what you did and what remains.\n\n' +
-      'User request:\n'
-    )
-    : '';
+  const planOnly = mode === 'plan';
+  const planOn = mode === 'thorough' || mode === 'build' || (mode !== 'fast' && !planOnly && String(process.env.PLAN_THEN_ACT || 'false').toLowerCase() === 'true');
+  const planPrefix = planOnly
+    ? 'PLAN MODE (READ-ONLY): Do not create, edit, delete, or overwrite any files. Do not run commands that modify the project. Inspect the workspace as needed, then return a clear implementation plan with steps, files likely to change, risks, and verification steps. Stop after presenting the plan.\n\nUser request:\n'
+    : planOn
+      ? 'Before making changes, briefly outline a short plan (3–6 bullets), then implement it in the workspace, run relevant checks when possible, and summarize the files changed and verification results.\n\nUser request:\n'
+      : '';
   const finalPrompt = planPrefix + prompt;
 
   const body = { parts: [{ type: 'text', text: finalPrompt }] };

@@ -20,7 +20,7 @@ export function agentRouter() {
       if (!workspaceId || !prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'workspaceId and prompt are required' });
       }
-      if (!['fast', 'thorough'].includes(mode)) return res.status(400).json({ error: 'mode must be fast or thorough' });
+      if (!['build', 'plan', 'fast', 'thorough'].includes(mode)) return res.status(400).json({ error: 'mode must be build, plan, fast or thorough' });
       if (prompt.length > 20000) {
         return res.status(413).json({ error: 'Prompt too long (20000 char limit)' });
       }

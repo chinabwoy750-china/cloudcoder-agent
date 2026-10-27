@@ -166,8 +166,8 @@
                 <input id="attach-input" type="file" multiple hidden />
                 <div class="select-wrap mode-select-wrap">
                   <select id="task-mode" aria-label="Task mode" title="Task mode">
-                    <option value="fast">Fast</option>
-                    <option value="thorough">Thorough</option>
+                    <option value="build">Build</option>
+                    <option value="plan">Plan</option>
                   </select>
                 </div>
                 <div class="select-wrap model-select-wrap">
@@ -178,6 +178,8 @@
                 </div>
               </div>
               <div class="composer-right">
+                <button type="button" id="generate-image-btn" class="icon-btn-sm media-action" title="Generate an image from the prompt" aria-label="Generate image">✦ Image</button>
+                <button type="button" id="generate-audio-btn" class="icon-btn-sm media-action" title="Generate audio from the prompt" aria-label="Generate audio">♫ Audio</button>
                 <button type="button" id="cancel-btn" class="cancel-btn hidden" aria-label="Cancel task">Cancel</button>
                 <button type="submit" id="send-btn" class="send-btn" aria-label="Send" disabled>
                   <span class="send-label">Send</span>

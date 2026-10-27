@@ -1136,3 +1136,34 @@ input:focus, textarea:focus, select:focus {
     text-align: left;
   }
 }
+
+
+/* Media actions + generated results */
+.media-action {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  padding: 0 10px;
+  width: auto !important;
+  min-width: 0;
+}
+.generated-media {
+  display: grid;
+  gap: 10px;
+  padding: 4px 0;
+}
+.generated-media img {
+  max-width: min(100%, 520px);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0b0d14;
+}
+.generated-media audio {
+  width: min(100%, 420px);
+}
+.generated-media a {
+  color: #aeb9ff;
+  font-size: 12px;
+  width: fit-content;
+}

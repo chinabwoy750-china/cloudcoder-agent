@@ -610,7 +610,7 @@ $('#composer').addEventListener('submit', async (e) => {
     : prompt;
 
   const requestedMode = $('#task-mode')?.value || 'fast';
-  const mode = isBuilder ? 'thorough' : requestedMode;
+  const mode = isBuilder ? 'build' : requestedMode;
 
   try {
     const model = $('#model-select').value || undefined;
@@ -634,6 +634,69 @@ $('#composer').addEventListener('submit', async (e) => {
     updateComposerState();
   }
 });
+
+
+
+async function generateMedia(kind) {
+  const prompt = ($('#prompt')?.value || '').trim();
+  if (!prompt) return toast('Enter a prompt first', 'err');
+  const imageBtn = $('#generate-image-btn');
+  const audioBtn = $('#generate-audio-btn');
+  if (kind === 'image' && imageBtn) { imageBtn.disabled = true; imageBtn.textContent = 'Working…'; }
+  if (kind === 'audio' && audioBtn) { audioBtn.disabled = true; audioBtn.textContent = 'Working…'; }
+  try {
+    if (kind === 'image') {
+      const models = await api('/api/media/models/all');
+      const list = models?.models || models?.data || {};
+      const imageModels = Array.isArray(list.image) ? list.image : (Array.isArray(list.images) ? list.images : []);
+      const model = imageModels[0]?.id || imageModels[0]?.model || imageModels[0]?.name || 'logfare/flux-1-schnell';
+      const result = await api('/api/media/image-generation', {
+        method: 'POST',
+        body: JSON.stringify({ model, prompt, n: 1 }),
+      });
+      const item = result?.data?.[0] || result?.images?.[0] || result?.data || result;
+      const src = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : item?.image_url);
+      if (src) {
+        const msg = addMessage('agent', '');
+        msg.innerHTML = `<div class="generated-media"><strong>Generated image</strong><img alt="Generated from your prompt" src="${escapeHtml(src)}" /></div>`;
+      } else {
+        addMessage('tool', `Image endpoint responded: ${JSON.stringify(result).slice(0, 1200)}`);
+      }
+      toast('Image generation request finished.', 'ok');
+    } else {
+      const blobResponse = await fetch('/api/media/audio', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CloudCoder-CSRF': '1',
+        },
+        body: JSON.stringify({ model: 'logfare/melotts', input: prompt, voice: 'alloy' }),
+      });
+      if (!blobResponse.ok) {
+        let message = `HTTP ${blobResponse.status}`;
+        try { message = (await blobResponse.json()).error || message; } catch {}
+        throw new Error(message);
+      }
+      const blob = await blobResponse.blob();
+      const url = URL.createObjectURL(blob);
+      const msg = addMessage('agent', '');
+      msg.innerHTML = '<div class="generated-media"><strong>Generated audio</strong><audio controls></audio><a download="universal-modder-audio.mp3">Download audio</a></div>';
+      msg.querySelector('audio').src = url;
+      msg.querySelector('a').href = url;
+      toast('Audio generated.', 'ok');
+    }
+  } catch (err) {
+    addMessage('tool', `Media generation failed: ${err.message}`);
+    toast(err.message, 'err');
+  } finally {
+    if (imageBtn) { imageBtn.disabled = false; imageBtn.innerHTML = '✦ Image'; }
+    if (audioBtn) { audioBtn.disabled = false; audioBtn.innerHTML = '♫ Audio'; }
+  }
+}
+
+$('#generate-image-btn')?.addEventListener('click', () => generateMedia('image'));
+$('#generate-audio-btn')?.addEventListener('click', () => generateMedia('audio'));
 
 // Enter to send, Shift+Enter for newline
 $('#prompt').addEventListener('keydown', (e) => {
