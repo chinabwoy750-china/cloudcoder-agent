@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08090d" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>CloudCoder Agent</title>
+<title>Universal Modder — AI Web App Studio</title>
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -27,8 +27,8 @@
           <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <h1>CloudCoder</h1>
-      <p class="muted">Your hosted AI coding agent</p>
+      <h1>Universal Modder</h1>
+      <p class="muted">Import, modify and improve web apps with AI</p>
     </div>
     <label class="field">
       <span>Username</span>
@@ -59,7 +59,7 @@
             <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <span>CloudCoder</span>
+        <span>Universal Modder</span>
       </div>
       <button id="sidebar-close" class="icon-btn mobile-only" aria-label="Close menu" type="button">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -86,7 +86,7 @@
       </button>
       <button class="nav-btn" data-view="settings" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Settings</span>
+        <span>Admin panel</span>
       </button>
     </nav>
 
@@ -116,13 +116,30 @@
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       </button>
       <div class="topbar-title">
-        <span class="brand-mobile">CloudCoder</span>
+        <span class="brand-mobile" id="project-title">Universal Modder</span>
         <span class="ws-pill" id="ws-pill" hidden></span>
       </div>
+      <button id="preview-toggle" class="preview-toggle" type="button" aria-label="Open website preview" title="Open website preview">
+        <span class="preview-toggle-label">Preview</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
       <button id="inspector-btn" class="icon-btn mobile-only" aria-label="Workspace panel" type="button">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
       </button>
     </header>
+
+    <section id="preview-view" class="preview-view hidden" aria-label="Website preview">
+      <header class="preview-toolbar">
+        <div class="preview-toolbar-title"><span class="preview-live-dot"></span><strong>Live preview</strong><span id="preview-status">Choose a project to preview</span></div>
+        <div class="preview-toolbar-actions">
+          <button id="preview-build" class="ghost-btn" type="button">Build & preview</button>
+          <button id="preview-reload" class="icon-btn" type="button" aria-label="Reload preview" title="Reload preview">↻</button>
+          <button id="preview-close" class="icon-btn" type="button" aria-label="Close preview" title="Back to chat">×</button>
+        </div>
+      </header>
+      <div id="preview-empty" class="preview-empty"><div class="preview-empty-icon">↗</div><h3>Your app preview will appear here</h3><p>Build the project to preview its actual HTML, CSS and JavaScript output.</p></div>
+      <iframe id="preview-frame" title="Website preview" sandbox="allow-scripts allow-forms allow-popups" hidden></iframe>
+    </section>
 
     <!-- CHAT -->
     <section id="view-chat" class="view">
@@ -133,8 +150,8 @@
               <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <h3 id="empty-title">Select a workspace first</h3>
-          <p id="empty-copy">Create a workspace or clone a repository, then ask CloudCoder to inspect, fix, refactor or test code.</p>
+          <h3 id="empty-title">What's on your mind?</h3>
+          <p id="empty-copy">Describe the website or web app you want to create.</p>
           <div class="suggestions" id="suggestions">
             <button class="suggestion" type="button" data-prompt="Summarize this project's structure and stack.">Summarize this project</button>
             <button class="suggestion" type="button" data-prompt="Find bugs in this project and propose fixes.">Find bugs</button>
@@ -147,7 +164,7 @@
       <div class="composer-wrap">
         <form id="composer" class="composer" autocomplete="off">
           <div class="composer-inner">
-            <textarea id="prompt" placeholder="Select a workspace to start…" rows="1" required disabled></textarea>
+            <textarea id="prompt" placeholder="Describe what you want to build…" rows="1" required></textarea>
             <div class="composer-bar">
               <div class="composer-left">
                 <button type="button" id="attach-btn" class="icon-btn-sm" title="Attach files" aria-label="Attach files">
@@ -155,13 +172,12 @@
                 </button>
                 <input id="attach-input" type="file" multiple hidden />
                 <div class="select-wrap mode-select-wrap">
-                  <select id="task-mode" aria-label="Task mode" title="Choose whether the agent should plan or implement">
-                    <option value="build">Build mode</option>
-                    <option value="plan">Plan mode</option>
+                  <select id="task-mode" aria-label="Composer mode" title="Build or Plan">
+                    <option value="build">Build</option>
+                    <option value="plan">Plan</option>
                   </select>
-                  <svg class="select-chev" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
                 </div>
-                <div class="select-wrap model-select-wrap">
+                <div class="select-wrap model-select-wrap composer-model-hidden">
                   <select id="model-select" aria-label="Model">
                     <option value="">default model</option>
                   </select>
@@ -171,7 +187,7 @@
               <div class="composer-right">
                 <button type="button" id="cancel-btn" class="cancel-btn hidden" aria-label="Cancel task">Cancel</button>
                 <button type="submit" id="send-btn" class="send-btn" aria-label="Send" disabled>
-                  <span class="send-label">Send</span>
+                  <span class="send-label">Build</span>
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                 </button>
               </div>
@@ -225,10 +241,39 @@
       <div class="panel">
         <header class="panel-head">
           <div>
-            <h2>Settings</h2>
-            <p class="muted small">Session and account</p>
+            <h2>Admin panel</h2>
+            <p class="muted small">Manage providers, models, integrations and account settings for Universal Modder.</p>
           </div>
         </header>
+        <div class="settings-group settings-wide">
+          <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">Configure China-GPT or another OpenAI-compatible endpoint here. Secrets are saved server-side, never returned to the browser.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
+          <form id="provider-settings-form" class="settings-form">
+            <label class="field"><span>Base URL</span><input id="provider-base-url" type="url" placeholder="https://your-gateway.example/v1" required /></label>
+            <div class="settings-grid">
+              <label class="field"><span>Provider ID</span><input id="provider-id" placeholder="china-gpt" required maxlength="64" /></label>
+              <label class="field"><span>Display name</span><input id="provider-name" placeholder="China-GPT" maxlength="80" /></label>
+            </div>
+            <label class="field"><span>API key <small class="muted">(leave blank to keep the saved key)</small></span><input id="provider-api-key" type="password" autocomplete="new-password" placeholder="Paste API key only when adding or replacing it" /></label>
+            <div class="settings-grid">
+              <label class="field"><span>Default model ID</span><input id="provider-model" list="provider-model-options" placeholder="Choose a model ID" required /><datalist id="provider-model-options"></datalist></label>
+              <label class="field"><span>Model display name</span><input id="provider-model-name" placeholder="MiniMax M2.7" /></label>
+            </div>
+            <div class="row wrap settings-actions"><button id="refresh-provider-models" class="ghost-btn" type="button">Refresh models</button><button id="save-provider-settings" class="primary-btn" type="submit">Save provider & restart</button></div>
+            <p class="muted small" id="provider-note">Site settings are kept in a private runtime file. Render's filesystem is ephemeral unless you attach a persistent disk, so settings may reset on redeploy.</p>
+          </form>
+        </div>
+        <div class="settings-group settings-wide">
+          <h3>Model routing</h3>
+          <p class="muted small">Choose which model Universal Modder uses for each task type. Leave a field blank to use the configured default. Model IDs come from your provider's catalog; image, video and audio selections are saved for the generation integrations.</p>
+          <form id="model-routing-form" class="settings-form">
+            <label class="field"><span>Build model</span><input id="routing-build" list="provider-model-options" placeholder="Use default model" /></label>
+            <label class="field"><span>Plan model</span><input id="routing-plan" list="provider-model-options" placeholder="Use default model" /></label>
+            <label class="field"><span>Image generation model</span><input id="routing-image" list="provider-model-options" placeholder="Image model ID" /></label>
+            <label class="field"><span>Video generation model</span><input id="routing-video" list="provider-model-options" placeholder="Video model ID" /></label>
+            <label class="field"><span>Audio generation model</span><input id="routing-audio" list="provider-model-options" placeholder="Audio / TTS model ID" /></label>
+            <button class="primary-btn" type="submit">Save model routing</button>
+          </form>
+        </div>
         <div class="settings-group">
           <h3>Preferred model</h3>
           <p class="muted small">Your selection is remembered on this device. Options come from the configured endpoint.</p>
@@ -246,7 +291,23 @@
           </dl>
         </div>
         <div class="settings-group">
-          <h3>Account</h3>
+          <h3>GitHub integration</h3>
+          <p class="muted small">Optional. Add a personal access token to enable private repository listing, cloning and GitHub operations. The token is never sent back to the browser.</p>
+          <form id="github-settings-form" class="settings-form">
+            <label class="field"><span>GitHub token</span><input id="github-token" type="password" autocomplete="new-password" placeholder="Paste token to add or replace it" /></label>
+            <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span><button class="ghost-btn" type="submit">Save GitHub settings</button></div>
+          </form>
+        </div>
+        <div class="settings-group">
+          <h3>Website login</h3>
+          <p class="muted small">Render environment credentials remain the bootstrap fallback. You can optionally override the username and password here.</p>
+          <form id="account-settings-form" class="settings-form">
+            <label class="field"><span>Username</span><input id="account-username" autocomplete="username" required maxlength="80" /></label>
+            <label class="field"><span>New password <small class="muted">(optional; 12+ characters)</small></span><input id="account-password" type="password" autocomplete="new-password" minlength="12" placeholder="Leave blank to keep the current password" /></label>
+            <label class="checkbox-line"><input id="account-use-env-password" type="checkbox" /> <span>Use the password from Render environment instead</span></label>
+            <button class="ghost-btn" type="submit">Save login settings</button>
+          </form>
+          <div class="settings-divider"></div>
           <p class="muted small">Sign out of this browser.</p>
           <button id="logout-btn" class="danger-btn" type="button">Sign out</button>
         </div>
@@ -279,7 +340,6 @@
         <h3>Actions</h3>
       </div>
       <div class="row wrap">
-        <button id="btn-preview" class="primary-btn" type="button">Open preview</button>
         <button id="btn-diff" class="ghost-btn" type="button">Diff</button>
         <button id="btn-test" class="ghost-btn" type="button">Run tests</button>
         <button id="btn-build" class="ghost-btn" type="button">Build</button>
@@ -296,12 +356,14 @@
   </aside>
 </div>
 
-<div id="preview-modal" class="preview-modal hidden" role="dialog" aria-modal="true" aria-label="Project preview">
-  <div class="preview-panel">
-    <div class="preview-toolbar"><strong>Project preview</strong><span id="preview-url" class="muted small"></span><button id="preview-refresh" class="ghost-btn" type="button">Refresh</button><button id="preview-close" class="ghost-btn" type="button">Close</button></div>
-    <iframe id="preview-frame" title="Generated project preview" sandbox="allow-scripts allow-forms allow-modals allow-downloads" referrerpolicy="no-referrer"></iframe>
-    <p id="preview-note" class="muted small">Static preview: serves project files without running npm scripts. Framework apps requiring a dev server are not supported in this phase.</p>
-  </div>
+<div id="workspace-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
+  <form id="workspace-form" class="modal-card">
+    <div class="modal-icon">✦</div>
+    <h2 id="workspace-modal-title">Create a workspace</h2>
+    <p class="muted small">Give this project a name you’ll recognize later.</p>
+    <label class="field"><span>Workspace name</span><input id="workspace-name-input" maxlength="80" placeholder="e.g. My portfolio website" required autofocus /></label>
+    <div class="row modal-actions"><button id="workspace-cancel" class="ghost-btn" type="button">Cancel</button><button class="primary-btn" type="submit">Create workspace</button></div>
+  </form>
 </div>
 <div id="toasts" class="toasts" aria-live="assertive"></div>
 

@@ -26,7 +26,8 @@ const state = {
   models: [],
   openCodeReady: false,
   modelMeta: { defaultModel: null, source: null, error: null },
-  taskMode: localStorage.getItem('um-task-mode') === 'plan' ? 'plan' : 'build',
+  previewOpen: false,
+  modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
 };
 
 /* ---------------- Utilities ---------------- */
@@ -161,6 +162,7 @@ $$('.nav-btn').forEach((btn) => {
     $$('.view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${view}`));
     if (view === 'files') refreshFiles();
     if (view === 'repos') refreshRepos();
+    if (view === 'settings') loadSiteSettings();
     closeDrawers();
   });
 });
@@ -180,27 +182,31 @@ function updateComposerState() {
   const hasWs = Boolean(state.workspaceId);
   const ready = state.openCodeReady;
   const busy = Boolean(state.jobId);
-  const canType = hasWs && !busy;
-  const canSend = hasWs && ready && !busy && Boolean(prompt?.value.trim());
+  const canType = ready && !busy;
+  const canSend = ready && !busy && Boolean(prompt?.value.trim());
 
   if (prompt) {
     prompt.disabled = !canType;
-    prompt.placeholder = !hasWs
-      ? 'Select a workspace to start…'
-      : !ready
-        ? 'OpenCode is starting… try again in a moment'
-        : 'Message CloudCoder…';
+    prompt.placeholder = !ready
+      ? 'Connecting to the coding engine…'
+      : hasWs
+        ? 'Tell Universal Modder what to change…'
+        : 'Describe what you want to build…';
   }
   if (send) send.disabled = !canSend;
   if (attach) attach.disabled = !hasWs || busy;
   if (modelSel) modelSel.disabled = busy;
-
+  const modeSel = $('#task-mode'); if (modeSel) modeSel.disabled = busy;
+  const app = $('#app');
+  if (app) app.classList.toggle('home-mode', !hasWs && !state.previewOpen);
+  const projectTitle = $('#project-title');
+  if (projectTitle) projectTitle.textContent = hasWs ? (state.workspaces.find((w) => w.id === state.workspaceId)?.name || 'Project') : 'Universal Modder';
   if (emptyTitle && emptyCopy && !hasWs) {
-    emptyTitle.textContent = 'Select a workspace first';
-    emptyCopy.textContent = 'Create a workspace or clone a repository, then ask CloudCoder to inspect, fix, refactor or test code.';
+    emptyTitle.textContent = "What's on your mind?";
+    emptyCopy.textContent = 'Describe the website or web app you want to create.';
   } else if (emptyTitle && emptyCopy && hasWs) {
-    emptyTitle.textContent = 'Ready when you are';
-    emptyCopy.textContent = 'Ask CloudCoder to inspect, fix, refactor or test code in this workspace.';
+    emptyTitle.textContent = 'What would you like to change?';
+    emptyCopy.textContent = 'Ask Universal Modder to build, redesign, debug or improve this project.';
   }
   if (suggestions) suggestions.classList.toggle('disabled', !hasWs);
 }
@@ -215,22 +221,38 @@ async function refreshWorkspaces() {
   for (const w of state.workspaces) {
     const li = document.createElement('li');
     li.className = 'clickable';
-    li.textContent = `${w.id} · ${w.files} files`;
+    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${w.files} files</span>`;
     li.addEventListener('click', () => selectWorkspace(w.id));
     ul.appendChild(li);
   }
   if (!state.workspaces.length) ul.innerHTML = '<li class="muted small">No workspaces yet</li>';
 }
 
-$('#new-workspace').addEventListener('click', async () => {
+function openWorkspaceModal() {
+  const modal = $('#workspace-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  $('#workspace-name-input').value = '';
+  setTimeout(() => $('#workspace-name-input')?.focus(), 20);
+}
+function closeWorkspaceModal() { $('#workspace-modal')?.classList.add('hidden'); }
+$('#new-workspace').addEventListener('click', openWorkspaceModal);
+$('#workspace-cancel')?.addEventListener('click', closeWorkspaceModal);
+$('#workspace-modal')?.addEventListener('click', (e) => { if (e.target.id === 'workspace-modal') closeWorkspaceModal(); });
+$('#workspace-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('#workspace-name-input').value.trim();
+  if (!name) return;
+  const btn = $('#workspace-form button[type="submit"]');
+  btn.disabled = true;
   try {
-    const res = await api('/api/workspaces', { method: 'POST', body: '{}' });
+    const res = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name }) });
+    closeWorkspaceModal();
     await refreshWorkspaces();
     selectWorkspace(res.workspaceId);
-    toast('Workspace created', 'ok');
-  } catch (err) {
-    toast(err.message, 'err');
-  }
+    toast(`Workspace “${res.name || name}” created`, 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
 });
 
 $('#new-task-btn')?.addEventListener('click', () => {
@@ -240,14 +262,17 @@ $('#new-task-btn')?.addEventListener('click', () => {
 async function selectWorkspace(id) {
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
-  if (wsPill) { wsPill.hidden = false; wsPill.textContent = id; }
+  const selectedMeta = state.workspaces.find((w) => w.id === id);
+  if (wsPill) { wsPill.hidden = false; wsPill.textContent = selectedMeta?.name || id; }
+  const title = $('#project-title'); if (title) title.textContent = selectedMeta?.name || 'Project';
+  if (state.previewOpen) refreshPreview(false);
 
   const info = await api(`/api/workspaces/${id}`).catch(() => null);
   const dl = $('#ws-info');
   if (dl) {
     dl.innerHTML = '';
     const rows = [
-      ['Workspace', id],
+      ['Workspace', info?.name || selectedMeta?.name || id],
       ['Project', info?.project?.type || 'unknown'],
       ['Files', String(info?.files ?? '—')],
       ['Size', info ? `${(info.bytes / 1024).toFixed(1)} KB` : '—'],
@@ -383,29 +408,6 @@ $('#btn-diff').addEventListener('click', async () => {
   } catch (err) { $('#terminal').textContent = err.message; }
 });
 
-$('#btn-preview')?.addEventListener('click', async () => {
-  if (!state.workspaceId) return toast('Select a workspace first', 'err');
-  try {
-    const url = `/api/workspaces/${encodeURIComponent(state.workspaceId)}/preview/`;
-    const response = await fetch(url, { credentials: 'same-origin' });
-    if (!response.ok) throw new Error(response.status === 404 ? 'No index.html found at the project root. Static preview needs a root index.html.' : `Preview unavailable (HTTP ${response.status})`);
-    $('#preview-frame').src = url;
-    $('#preview-url').textContent = `Workspace ${state.workspaceId}`;
-    $('#preview-modal').classList.remove('hidden');
-  } catch (err) { toast(err.message, 'err'); }
-});
-$('#preview-close')?.addEventListener('click', () => {
-  $('#preview-modal').classList.add('hidden');
-  $('#preview-frame').src = 'about:blank';
-});
-$('#preview-refresh')?.addEventListener('click', () => {
-  const frame = $('#preview-frame');
-  if (frame?.src) frame.src = frame.src.split('?')[0] + `?refresh=${Date.now()}`;
-});
-$('#preview-modal')?.addEventListener('click', (event) => {
-  if (event.target.id === 'preview-modal') $('#preview-close').click();
-});
-
 $('#btn-test').addEventListener('click', () => runAction('test'));
 $('#btn-build').addEventListener('click', () => runAction('build'));
 
@@ -457,7 +459,7 @@ function addMessage(role, text, { html = false } = {}) {
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
   avatar.setAttribute('aria-hidden', 'true');
-  avatar.textContent = role === 'user' ? 'YOU' : role === 'tool' ? 'TOOL' : 'AI';
+  avatar.textContent = role === 'user' ? 'Y' : role === 'tool' ? '↳' : '✦';
 
   const content = document.createElement('div');
   content.className = 'msg-content';
@@ -502,24 +504,18 @@ document.addEventListener('click', (e) => {
   p.focus();
 });
 
-const taskModeSelect = $('#task-mode');
-if (taskModeSelect) {
-  taskModeSelect.value = state.taskMode;
-  taskModeSelect.addEventListener('change', () => {
-    state.taskMode = taskModeSelect.value === 'plan' ? 'plan' : 'build';
-    localStorage.setItem('um-task-mode', state.taskMode);
-    taskModeSelect.title = state.taskMode === 'plan'
-      ? 'Plan mode asks the agent to analyze and propose steps without editing files.'
-      : 'Build mode asks the agent to implement the request and verify the result.';
-  });
-}
-
 $('#composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('#prompt').value.trim();
   if (!prompt) return;
-  if (!state.workspaceId) return toast('Select or create a workspace first', 'err');
-  if (!state.openCodeReady) return toast('OpenCode is still starting — wait a few seconds', 'err');
+  if (!state.openCodeReady) return toast('The coding engine is still starting — wait a few seconds', 'err');
+  if (!state.workspaceId) {
+    try {
+      const created = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: prompt.slice(0, 48).replace(/\s+/g, ' ').trim() || 'New project' }) });
+      await refreshWorkspaces();
+      await selectWorkspace(created.workspaceId);
+    } catch (err) { return toast(`Could not create project: ${err.message}`, 'err'); }
+  }
 
   addMessage('user', prompt);
   $('#prompt').value = '';
@@ -529,10 +525,15 @@ $('#composer').addEventListener('submit', async (e) => {
   updateComposerState();
 
   try {
-    const model = $('#model-select').value || undefined;
+    const composerMode = $('#task-mode')?.value || 'build';
+    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select').value || undefined;
+    const mode = composerMode === 'plan' ? 'thorough' : 'fast';
+    const modePrompt = composerMode === 'plan'
+      ? `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`
+      : `BUILD MODE: Implement the requested changes in the project, then run appropriate checks and report what was verified.\n\nUser request: ${prompt}`;
     const { jobId } = await api('/api/agent/tasks', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: state.workspaceId, prompt, model, mode: state.taskMode }),
+      body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, mode }),
     });
     state.jobId = jobId;
     streamJob(jobId);
@@ -588,6 +589,7 @@ function streamJob(jobId) {
       updateComposerState();
       refreshStatus();
       refreshFiles();
+      if (state.previewOpen) refreshPreview(false);
     }
   };
   es.onerror = () => {
@@ -729,6 +731,154 @@ $('#settings-model')?.addEventListener('change', () => {
   if (sel && sel.value !== v) sel.value = v;
 });
 
+/* ---------------- Project preview ---------------- */
+function openPreview() {
+  if (!state.workspaceId) return toast('Create a project first to open its preview', 'err');
+  state.previewOpen = true;
+  $('#preview-view')?.classList.remove('hidden');
+  updateComposerState();
+  refreshPreview(false);
+}
+function closePreview() {
+  state.previewOpen = false;
+  $('#preview-view')?.classList.add('hidden');
+  updateComposerState();
+}
+async function refreshPreview(showToast = true) {
+  if (!state.workspaceId) return;
+  const frame = $('#preview-frame');
+  const empty = $('#preview-empty');
+  const status = $('#preview-status');
+  const url = `/api/workspaces/${encodeURIComponent(state.workspaceId)}/preview/`;
+  if (status) status.textContent = 'Loading project files…';
+  try {
+    const res = await fetch(url, { credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+    if (!res.ok) {
+      const info = await res.json().catch(() => ({}));
+      throw new Error(info.error || `Preview returned HTTP ${res.status}`);
+    }
+    if (frame) { frame.hidden = false; frame.src = `${url}?t=${Date.now()}`; }
+    if (empty) empty.hidden = true;
+    if (status) status.textContent = 'Project preview';
+  } catch (err) {
+    if (frame) frame.hidden = true;
+    if (empty) { empty.hidden = false; empty.innerHTML = `<div class="preview-empty-icon">↗</div><h3>Preview isn't ready yet</h3><p>${escapeHtml(err.message)}. Try Build & preview after creating the app.</p>`; }
+    if (status) status.textContent = 'Not ready';
+    if (showToast) toast(err.message, 'err');
+  }
+}
+$('#preview-toggle')?.addEventListener('click', () => state.previewOpen ? closePreview() : openPreview());
+$('#preview-close')?.addEventListener('click', closePreview);
+$('#preview-reload')?.addEventListener('click', () => refreshPreview(true));
+$('#preview-build')?.addEventListener('click', async () => {
+  if (!state.workspaceId) return toast('Create a project first', 'err');
+  const btn = $('#preview-build'); btn.disabled = true; btn.textContent = 'Building…';
+  const status = $('#preview-status'); if (status) status.textContent = 'Running build…';
+  try {
+    const result = await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/build-repair`, { method: 'POST', body: '{}' });
+    if (!result.supported) throw new Error(result.reason || 'Build is not supported for this project');
+    if (!result.ok) throw new Error((result.results || []).map((r) => r.stderr || r.stdout || `Exit code ${r.code}`).join('\n').slice(0, 700) || 'Build failed');
+    toast('Build completed. Loading preview…', 'ok');
+    await refreshPreview(true);
+  } catch (err) {
+    if (status) status.textContent = 'Build failed';
+    toast(`Build failed: ${err.message}`, 'err');
+  } finally { btn.disabled = false; btn.textContent = 'Build & preview'; }
+});
+
+/* ---------------- Site-managed settings ---------------- */
+async function loadSiteSettings() {
+  try {
+    const data = await api('/api/settings');
+    const p = data.provider || {};
+    $('#provider-base-url').value = p.baseURL || '';
+    $('#provider-id').value = p.providerId || 'china-gpt';
+    $('#provider-name').value = p.providerName || 'China-GPT';
+    $('#provider-model').value = p.model || '';
+    $('#provider-model-name').value = p.modelName || '';
+    $('#provider-api-key').value = '';
+    $('#provider-api-key').placeholder = p.hasApiKey ? 'Saved API key is configured — leave blank to keep it' : 'Paste your API key';
+    state.modelRouting = { build: '', plan: '', image: '', video: '', audio: '', ...(data.modelRouting || {}) };
+    for (const key of ['build', 'plan', 'image', 'video', 'audio']) {
+      const field = $(`#routing-${key}`); if (field) field.value = state.modelRouting[key] || '';
+    }
+    $('#account-username').value = data.account?.username || '';
+    const ghStatus = $('#github-token-status');
+    if (ghStatus) { ghStatus.textContent = data.integrations?.hasGithubToken ? 'Token configured' : 'Not configured'; ghStatus.classList.toggle('ready', Boolean(data.integrations?.hasGithubToken)); }
+    $('#github-token').value = '';
+    $('#github-token').placeholder = data.integrations?.hasGithubToken ? 'Token saved — leave blank to keep it' : 'Paste a GitHub personal access token';
+    const status = $('#provider-status');
+    if (status) { status.textContent = p.hasApiKey ? `${p.models?.length || 0} models · key set` : 'API key not set'; status.classList.toggle('ready', Boolean(p.hasApiKey)); }
+    const dl = $('#provider-model-options');
+    if (dl) dl.innerHTML = (p.models || []).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+  } catch (err) { toast(`Could not load settings: ${err.message}`, 'err'); }
+}
+
+$('#model-routing-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#model-routing-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const modelRouting = {};
+    for (const key of ['build', 'plan', 'image', 'video', 'audio']) modelRouting[key] = $(`#routing-${key}`).value.trim();
+    const result = await api('/api/settings/model-routing', { method: 'POST', body: JSON.stringify(modelRouting) });
+    state.modelRouting = result.modelRouting || modelRouting;
+    toast(result.message || 'Model routing saved', 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
+});
+
+$('#provider-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#save-provider-settings');
+  btn.disabled = true; btn.textContent = 'Saving & restarting…';
+  try {
+    const result = await api('/api/settings/provider', { method: 'POST', body: JSON.stringify({
+      baseURL: $('#provider-base-url').value.trim(), providerId: $('#provider-id').value.trim(),
+      providerName: $('#provider-name').value.trim(), apiKey: $('#provider-api-key').value,
+      model: $('#provider-model').value.trim(), modelName: $('#provider-model-name').value.trim(),
+    }) });
+    $('#provider-api-key').value = '';
+    toast(result.message || 'Provider updated', 'ok');
+    await loadModels(); await loadSiteSettings();
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Save provider & restart'; }
+});
+
+$('#refresh-provider-models')?.addEventListener('click', async () => {
+  const btn = $('#refresh-provider-models'); btn.disabled = true; btn.textContent = 'Refreshing…';
+  try {
+    const data = await api('/api/models?refresh=1');
+    const dl = $('#provider-model-options');
+    if (dl) dl.innerHTML = (data.models || []).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+    toast(`Found ${(data.models || []).length} model(s)`, 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Refresh models'; }
+});
+
+$('#github-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#github-settings-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const result = await api('/api/settings/integrations', { method: 'POST', body: JSON.stringify({ githubToken: $('#github-token').value }) });
+    $('#github-token').value = '';
+    toast(result.message || 'GitHub settings saved', 'ok');
+    await loadSiteSettings(); await refreshRepos();
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
+});
+
+$('#account-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#account-settings-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const result = await api('/api/settings/account', { method: 'POST', body: JSON.stringify({ username: $('#account-username').value.trim(), password: $('#account-password').value, useEnvPassword: $('#account-use-env-password').checked }) });
+    $('#account-password').value = '';
+    $('#account-use-env-password').checked = false;
+    toast(result.message || 'Login settings saved', 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
+});
+
 /* ---------------- Composer niceties ---------------- */
 
 function autoGrow() {
@@ -748,6 +898,7 @@ function autoGrow() {
 }
 
 $('#prompt')?.addEventListener('input', autoGrow);
+$('#task-mode')?.addEventListener('change', () => { const label = $('#send-btn .send-label'); if (label) label.textContent = $('#task-mode').value === 'plan' ? 'Plan' : 'Build'; });
 
 /* ---------------- Connection status ---------------- */
 

@@ -2,19 +2,16 @@ import crypto from 'node:crypto';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
-let runtimeCredentials = { username: null, passwordSalt: null, passwordHash: null };
+let runtimeCredentialOverride = null;
 
-export function clearRuntimePasswordOverride() {
-  runtimeCredentials.passwordSalt = null;
-  runtimeCredentials.passwordHash = null;
+export function setRuntimeCredentials(value) {
+  runtimeCredentialOverride = value && value.passwordHash && value.passwordSalt
+    ? { username: value.username || config.auth.username, passwordSalt: value.passwordSalt, passwordHash: value.passwordHash }
+    : null;
 }
 
-export function setRuntimeCredentials(values = {}) {
-  runtimeCredentials = {
-    username: values.username || runtimeCredentials.username,
-    passwordSalt: values.passwordSalt || runtimeCredentials.passwordSalt,
-    passwordHash: values.passwordHash || runtimeCredentials.passwordHash,
-  };
+export function clearRuntimePasswordOverride() {
+  runtimeCredentialOverride = null;
 }
 
 function timingSafeEq(a, b) {
@@ -36,13 +33,12 @@ export function parseBasicHeader(header) {
 }
 
 export function checkCredentials(user, pass) {
-  const expectedUser = runtimeCredentials.username || config.auth.username;
-  if (!timingSafeEq(user, expectedUser)) return false;
-  if (runtimeCredentials.passwordHash && runtimeCredentials.passwordSalt) {
-    const candidate = crypto.scryptSync(String(pass), runtimeCredentials.passwordSalt, 64).toString('hex');
-    return timingSafeEq(candidate, runtimeCredentials.passwordHash);
+  if (runtimeCredentialOverride) {
+    if (!timingSafeEq(user, runtimeCredentialOverride.username)) return false;
+    const candidate = crypto.scryptSync(String(pass), runtimeCredentialOverride.passwordSalt, 64).toString('hex');
+    return timingSafeEq(candidate, runtimeCredentialOverride.passwordHash);
   }
-  return timingSafeEq(pass, config.auth.password);
+  return timingSafeEq(user, config.auth.username) && timingSafeEq(pass, config.auth.password);
 }
 
 export function basicAuth(req, res, next) {

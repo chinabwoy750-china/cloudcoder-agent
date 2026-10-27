@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import multer from 'multer';
 import { config } from '../../config/env.js';
 import * as ws from '../../workspace/manager.js';
@@ -22,45 +23,6 @@ const upload = multer({
   },
 });
 
-
-const PREVIEW_DENY = /(^|\/)(?:\.git|node_modules|\.cloudcoder|\.ssh|\.aws|\.config)(?:\/|$)|(^|\/)\.env(?:\.|$)|(^|\/)(?:id_rsa|id_ed25519|\.npmrc|\.netrc)$/i;
-const MIME = {
-  '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff': 'font/woff',
-  '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.txt': 'text/plain; charset=utf-8',
-  '.webmanifest': 'application/manifest+json',
-};
-
-async function sendWorkspacePreview(req, res) {
-  const root = await ws.resolveWorkspace(req.params.id);
-  let rel = String(req.params[0] || '').replace(/\\/g, '/');
-  try { rel = decodeURIComponent(rel); } catch { return res.status(400).send('Invalid preview path'); }
-  rel = rel.replace(/^\/+/, '');
-  if (!rel || rel.endsWith('/')) rel += 'index.html';
-  if (rel.split('/').some((part) => part === '..') || PREVIEW_DENY.test(rel)) {
-    return res.status(403).send('Preview path not allowed');
-  }
-  const candidate = path.resolve(root, rel);
-  const rootReal = await fs.realpath(root);
-  const full = await fs.realpath(candidate).catch(() => null);
-  if (!full || (full !== rootReal && !full.startsWith(rootReal + path.sep))) {
-    return res.status(404).send('Preview file not found');
-  }
-  const stat = await fs.stat(full);
-  if (!stat.isFile()) return res.status(404).send('Preview file not found');
-  if (stat.size > config.limits.maxDownloadBytes) return res.status(413).send('Preview file too large');
-  const type = MIME[path.extname(full).toLowerCase()] || 'application/octet-stream';
-  res.setHeader('Content-Type', type);
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cache-Control', 'no-store');
-  // Preview runs in a sandboxed iframe in the UI; do not allow framing elsewhere.
-  res.setHeader('Content-Security-Policy', "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; connect-src 'self'; frame-ancestors 'self'");
-  res.sendFile(full);
-}
-
 function asyncH(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
@@ -70,19 +32,26 @@ export function filesRouter() {
 
   router.get('/workspaces', asyncH(async (req, res) => {
     const ids = await ws.listWorkspaces();
-    const stats = await Promise.all(ids.map((id) => ws.workspaceStats(id).catch(() => ({ id, files: 0, bytes: 0 }))));
+    const stats = await Promise.all(ids.map(async (id) => {
+      const base = await ws.workspaceStats(id).catch(() => ({ id, files: 0, bytes: 0 }));
+      const meta = await ws.getWorkspaceMeta(id);
+      return { ...base, name: meta.name || id, createdAt: meta.createdAt || null };
+    }));
     res.json(stats);
   }));
 
   router.post('/workspaces', rateLimitMiddleware({ windowMs: 60000, max: 20 }), asyncH(async (req, res) => {
-    const { id, dir } = await ws.createWorkspace();
-    res.status(201).json({ workspaceId: id, dir });
+    const name = req.body?.name;
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length > 80)) return res.status(400).json({ error: 'Workspace name must be 1–80 characters' });
+    const { id, dir, name: workspaceName } = await ws.createWorkspace(undefined, name || 'Untitled workspace');
+    res.status(201).json({ workspaceId: id, name: workspaceName, dir });
   }));
 
   router.get('/workspaces/:id', asyncH(async (req, res) => {
     const stats = await ws.workspaceStats(req.params.id);
     const project = await detectProjectType(stats.dir);
-    res.json({ ...stats, project, actions: allowedActions(project.type) });
+    const meta = await ws.getWorkspaceMeta(req.params.id);
+    res.json({ ...stats, name: meta.name || req.params.id, createdAt: meta.createdAt || null, project, actions: allowedActions(project.type) });
   }));
 
   router.delete('/workspaces/:id', asyncH(async (req, res) => {
@@ -91,15 +60,6 @@ export function filesRouter() {
     }
     await ws.removeWorkspace(req.params.id);
     res.json({ removed: true });
-  }));
-
-  // Static project preview only. This does not execute package scripts or launch untrusted servers.
-  router.get('/workspaces/:id/preview', asyncH(async (req, res) => {
-    req.params[0] = '';
-    await sendWorkspacePreview(req, res);
-  }));
-  router.get('/workspaces/:id/preview/*', asyncH(async (req, res) => {
-    await sendWorkspacePreview(req, res);
   }));
 
   router.get('/workspaces/:id/files', asyncH(async (req, res) => {
@@ -175,6 +135,44 @@ export function filesRouter() {
       await fs.rm(zip.path, { force: true }).catch(() => {});
       if (err && !res.headersSent) res.status(500).end();
     });
+  }));
+
+
+  // Serve the project's real built/static output inside the authenticated preview iframe.
+  // Prefer framework build directories; fall back to a root index.html for static projects.
+  router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
+    const dir = await ws.resolveWorkspace(req.params.id);
+    const candidates = [path.join(dir, 'dist'), path.join(dir, 'build'), path.join(dir, 'out'), dir];
+    let root = dir;
+    for (const candidate of candidates) {
+      try { const st = await fs.stat(path.join(candidate, 'index.html')); if (st.isFile()) { root = candidate; break; } } catch {}
+    }
+    const requested = String(req.params[0] || '').replace(/\\/g, '/');
+    if (requested.split('/').some((part) => part === '..' || part.startsWith('.'))) {
+      return res.status(400).json({ error: 'Invalid preview path' });
+    }
+    let target = path.resolve(root, requested || 'index.html');
+    const rootReal = await fs.realpath(root);
+    try {
+      let real = await fs.realpath(target);
+      if (real !== rootReal && !real.startsWith(rootReal + path.sep)) return res.status(403).json({ error: 'Preview path escapes project' });
+      const st = await fs.stat(real);
+      if (!st.isFile()) throw new Error('Not a file');
+      target = real;
+    } catch {
+      if (requested && !requested.endsWith('/')) return res.status(404).json({ error: `Preview asset not found: ${requested}` });
+      target = path.join(root, 'index.html');
+      if (!(await fs.stat(target).catch(() => null))?.isFile()) return res.status(404).json({ error: 'No index.html found. Build the project first or add an index.html file.' });
+    }
+    if (path.basename(target).toLowerCase() === 'index.html') {
+      let html = await fs.readFile(target, 'utf8');
+      const prefix = `/api/workspaces/${encodeURIComponent(req.params.id)}/preview/`;
+      if (!/<base\s/i.test(html)) html = html.replace(/<head([^>]*)>/i, `<head$1><base href="${prefix}">`);
+      html = html.replace(/(src|href|action)=(['"])\/(?!\/)/gi, `$1=$2${prefix}`);
+      res.type('html').send(html);
+      return;
+    }
+    res.sendFile(target);
   }));
 
   // Run a named project action (test / build / install).

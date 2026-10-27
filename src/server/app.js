@@ -11,6 +11,7 @@ import { githubRouter } from './routes/github.js';
 import { filesRouter } from './routes/files.js';
 import { modelsRouter } from './routes/models.js';
 import { settingsRouter } from './routes/settings.js';
+import { buildRepairRouter } from './routes/build-repair.js';
 import { chinaGptRouter } from './routes/china-gpt.js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
@@ -68,6 +69,7 @@ export function createApp() {
   app.use('/api/models', modelsRouter());
   app.use('/api/media', chinaGptRouter);
   app.use('/api/settings', settingsRouter());
+  app.use('/api/workspaces', buildRepairRouter());
   app.use('/api/github', githubRouter());
   app.use('/api', filesRouter());
 

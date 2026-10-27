@@ -7,8 +7,7 @@ import { fetchCustomModels } from './config/custom-models.js';
 import { loadRuntimeSettings } from './config/runtime-settings.js';
 
 async function main() {
-  logger.info(`Universal Modder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
-  await loadRuntimeSettings();
+  logger.info(`CloudCoder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
 
   // Strip non-ASCII from API key early — HTTP Authorization headers reject code points > 255
   // (e.g. bullet • U+2022 sometimes pasted into Render env vars).
@@ -21,6 +20,8 @@ async function main() {
   }
 
   validateEnv();
+  // Load site-managed provider/model settings before model discovery and OpenCode startup.
+  await loadRuntimeSettings();
   validateGitHubEnv();
   const telegramEnabled = validateTelegramEnv();
 
@@ -35,7 +36,7 @@ async function main() {
   // Bind public port first so Render sees $PORT immediately.
   const app = createApp();
   const server = app.listen(config.port, config.host, () => {
-    logger.info(`Universal Modder API listening on ${config.host}:${config.port}`);
+    logger.info(`CloudCoder API listening on ${config.host}:${config.port}`);
   });
 
   startOpenCode();
