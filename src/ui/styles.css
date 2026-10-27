@@ -697,3 +697,15 @@ input:focus, textarea:focus, select:focus {
 .composer-inner:has(#prompt:disabled) {
   opacity: 0.85;
 }
+
+
+/* Phase 2: sandboxed static preview panel */
+.preview-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(4, 8, 16, .78); padding: clamp(8px, 2vw, 24px); display: flex; align-items: center; justify-content: center; }
+.preview-modal.hidden { display: none; }
+.preview-panel { width: min(1440px, 100%); height: min(900px, 100%); min-height: 70vh; background: var(--panel, #111827); border: 1px solid var(--border, #2a3446); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+.preview-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border, #2a3446); }
+.preview-toolbar strong { margin-right: auto; }
+#preview-frame { display: block; flex: 1; width: 100%; min-height: 0; border: 0; background: white; }
+#preview-note { margin: 0; padding: 7px 12px; border-top: 1px solid var(--border, #2a3446); }
+.primary-btn { border: 1px solid var(--accent, #6d7cff); background: var(--accent, #6d7cff); color: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+@media (max-width: 600px) { .preview-modal { padding: 0; } .preview-panel { height: 100%; min-height: 100%; border-radius: 0; } .preview-toolbar { flex-wrap: wrap; } #preview-url { display: none; } }

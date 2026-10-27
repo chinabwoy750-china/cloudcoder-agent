@@ -383,6 +383,29 @@ $('#btn-diff').addEventListener('click', async () => {
   } catch (err) { $('#terminal').textContent = err.message; }
 });
 
+$('#btn-preview')?.addEventListener('click', async () => {
+  if (!state.workspaceId) return toast('Select a workspace first', 'err');
+  try {
+    const url = `/api/workspaces/${encodeURIComponent(state.workspaceId)}/preview/`;
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(response.status === 404 ? 'No index.html found at the project root. Static preview needs a root index.html.' : `Preview unavailable (HTTP ${response.status})`);
+    $('#preview-frame').src = url;
+    $('#preview-url').textContent = `Workspace ${state.workspaceId}`;
+    $('#preview-modal').classList.remove('hidden');
+  } catch (err) { toast(err.message, 'err'); }
+});
+$('#preview-close')?.addEventListener('click', () => {
+  $('#preview-modal').classList.add('hidden');
+  $('#preview-frame').src = 'about:blank';
+});
+$('#preview-refresh')?.addEventListener('click', () => {
+  const frame = $('#preview-frame');
+  if (frame?.src) frame.src = frame.src.split('?')[0] + `?refresh=${Date.now()}`;
+});
+$('#preview-modal')?.addEventListener('click', (event) => {
+  if (event.target.id === 'preview-modal') $('#preview-close').click();
+});
+
 $('#btn-test').addEventListener('click', () => runAction('test'));
 $('#btn-build').addEventListener('click', () => runAction('build'));
 
