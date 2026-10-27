@@ -66,7 +66,7 @@ export function createApp() {
 
   app.use('/api/agent', agentRouter());
   app.use('/api/models', modelsRouter());
-  app.use('/api/media', chinaGptRouter());
+  app.use('/api/media', chinaGptRouter);
   app.use('/api/settings', settingsRouter());
   app.use('/api/github', githubRouter());
   app.use('/api', filesRouter());
