@@ -786,6 +786,67 @@ $('#preview-build')?.addEventListener('click', async () => {
   } finally { btn.disabled = false; btn.textContent = 'Build & preview'; }
 });
 
+/* ---------------- Phase 4 visual editor ---------------- */
+let visualSelection = null;
+let visualEditEnabled = false;
+const visualFrame = () => $('#preview-frame');
+function setVisualMode(enabled) {
+  visualEditEnabled = Boolean(enabled);
+  const toggle = $('#visual-edit-toggle');
+  if (toggle) { toggle.setAttribute('aria-pressed', String(visualEditEnabled)); toggle.textContent = visualEditEnabled ? 'Exit visual edit' : 'Visual edit'; }
+  const frame = visualFrame(); if (frame) frame.classList.toggle('visual-selecting', visualEditEnabled);
+  try { frame?.contentWindow?.postMessage({ type: 'um-visual-mode', enabled: visualEditEnabled }, '*'); } catch {}
+  const status = $('#visual-editor-status'); if (status) status.textContent = visualEditEnabled ? 'Tap an element in the preview to select it.' : 'Visual edit is off.';
+}
+$('#visual-edit-toggle')?.addEventListener('click', () => {
+  if (!state.workspaceId) return toast('Select a workspace first', 'err');
+  $('#visual-editor')?.classList.toggle('hidden'); setVisualMode(!visualEditEnabled);
+});
+$('#visual-editor-close')?.addEventListener('click', () => { $('#visual-editor')?.classList.add('hidden'); setVisualMode(false); });
+visualFrame()?.addEventListener('load', () => { if (visualEditEnabled) setVisualMode(true); });
+window.addEventListener('message', (event) => {
+  const frame = visualFrame();
+  if (!frame || event.source !== frame.contentWindow || !event.data || event.data.type !== 'um-visual-select') return;
+  const d = event.data;
+  if (typeof d.selector !== 'string' || d.selector.length > 500 || !/^[a-zA-Z0-9_#.: >+\-\[\]="']+$/.test(d.selector)) return;
+  visualSelection = { selector: d.selector, tag: String(d.tag || '').slice(0,30) };
+  $('#visual-selector').value = d.selector;
+  const toHex = (value, fallback) => { const m = String(value || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); return m ? '#' + m.slice(1,4).map(x => Number(x).toString(16).padStart(2,'0')).join('') : fallback; };
+  $('#visual-color').value = toHex(d.color, '#222222'); $('#visual-background').value = toHex(d.background, '#ffffff');
+  $('#visual-font-size').value = Math.round(Number(d.fontSize) || 16); $('#visual-padding').value = Math.round(Number(d.padding) || 0); $('#visual-radius').value = Math.round(Number(d.radius) || 0);
+  $('#visual-save').disabled = false; $('#visual-editor-status').textContent = `Selected <${visualSelection.tag}>. Adjust values and apply.`;
+});
+$('#visual-reset')?.addEventListener('click', () => { visualSelection = null; $('#visual-selector').value = ''; $('#visual-save').disabled = true; $('#visual-editor-status').textContent = 'Selection cleared.'; });
+$('#visual-save')?.addEventListener('click', async () => {
+  if (!state.workspaceId || !visualSelection) return toast('Select an element first', 'err');
+  const selector = visualSelection.selector;
+  const declarations = [];
+  const color = $('#visual-color').value; const background = $('#visual-background').value;
+  const font = Number($('#visual-font-size').value); const padding = Number($('#visual-padding').value); const radius = Number($('#visual-radius').value);
+  if (/^#[0-9a-f]{6}$/i.test(color)) declarations.push(`color: ${color} !important`);
+  if (/^#[0-9a-f]{6}$/i.test(background)) declarations.push(`background-color: ${background} !important`);
+  if (Number.isFinite(font) && font >= 8 && font <= 96) declarations.push(`font-size: ${font}px !important`);
+  if (Number.isFinite(padding) && padding >= 0 && padding <= 160) declarations.push(`padding: ${padding}px !important`);
+  if (Number.isFinite(radius) && radius >= 0 && radius <= 100) declarations.push(`border-radius: ${radius}px !important`);
+  if (!declarations.length) return toast('Enter at least one valid style value', 'err');
+  const btn = $('#visual-save'); btn.disabled = true;
+  try {
+    const path = '.universal-modder-visual.css';
+    let existing = '';
+    try { const res = await fetch(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file?path=${encodeURIComponent(path)}`, { credentials:'same-origin', headers:{'X-CloudCoder-CSRF':'1'} }); if (res.ok) existing = await res.text(); } catch {}
+    const safeSelector = selector.replace(/\s+/g, ' ').trim();
+    const block = `\n/* Universal Modder visual edit: ${new Date().toISOString()} */\n${safeSelector} { ${declarations.join('; ')}; }\n`;
+    const escaped = safeSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rule = new RegExp(`(?:^|\\n)${escaped}\\s*\\{[^}]*\\}\\s*`, 'g');
+    const content = (existing.replace(rule, '\n') + block).slice(-100000);
+    await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file`, { method:'PUT', body: JSON.stringify({ path, content }) });
+    await refreshPreview(false);
+    $('#visual-editor-status').textContent = 'Saved to .universal-modder-visual.css and refreshed preview.';
+    toast('Visual changes saved to project files', 'ok');
+  } catch (err) { $('#visual-editor-status').textContent = err.message; toast(`Could not save visual edit: ${err.message}`, 'err'); }
+  finally { btn.disabled = !visualSelection; }
+});
+
 /* ---------------- Site-managed settings ---------------- */
 async function loadSiteSettings() {
   try {

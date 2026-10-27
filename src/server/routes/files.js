@@ -11,6 +11,7 @@ import { runProjectAction, allowedActions } from '../../workspace/run.js';
 import { detectProjectType } from '../../git/detect.js';
 import { rateLimitMiddleware } from '../../utils/ratelimit.js';
 import { logger } from '../../utils/logger.js';
+import { createWorkspaceSnapshot, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from '../../workspace/snapshots.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -138,6 +139,29 @@ export function filesRouter() {
   }));
 
 
+  // Workspace snapshots provide an explicit recovery point before risky AI edits.
+  router.get('/workspaces/:id/snapshots', asyncH(async (req, res) => {
+    res.json({ snapshots: await listWorkspaceSnapshots(req.params.id) });
+  }));
+  router.post('/workspaces/:id/snapshots', rateLimitMiddleware({ windowMs: 60000, max: 10 }), asyncH(async (req, res) => {
+    const label = typeof req.body?.label === 'string' ? req.body.label : '';
+    const snapshot = await createWorkspaceSnapshot(req.params.id, label);
+    res.status(201).json({ ok: true, snapshot });
+  }));
+  router.post('/workspaces/:id/snapshots/:snapshotId/restore', rateLimitMiddleware({ windowMs: 60000, max: 3 }), asyncH(async (req, res) => {
+    if (req.body?.confirm !== true) return res.status(400).json({ error: 'Restore is destructive; send confirm=true after reviewing the snapshot.' });
+    const result = await restoreWorkspaceSnapshot(req.params.id, req.params.snapshotId);
+    res.json({ ok: true, ...result, message: 'Snapshot restored. Rebuild the project to refresh generated output.' });
+  }));
+
+  // Serve saved visual overrides from the workspace root, independent of build output directory.
+  router.get('/workspaces/:id/visual-overrides.css', asyncH(async (req, res) => {
+    const dir = await ws.resolveWorkspace(req.params.id);
+    const cssPath = path.join(dir, '.universal-modder-visual.css');
+    const css = await fs.readFile(cssPath, 'utf8').catch(() => '');
+    res.type('text/css').set('Cache-Control', 'no-store').send(css);
+  }));
+
   // Serve the project's real built/static output inside the authenticated preview iframe.
   // Prefer framework build directories; fall back to a root index.html for static projects.
   router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
@@ -169,6 +193,9 @@ export function filesRouter() {
       const prefix = `/api/workspaces/${encodeURIComponent(req.params.id)}/preview/`;
       if (!/<base\s/i.test(html)) html = html.replace(/<head([^>]*)>/i, `<head$1><base href="${prefix}">`);
       html = html.replace(/(src|href|action)=(['"])\/(?!\/)/gi, `$1=$2${prefix}`);
+      const visualCss = `<link rel="stylesheet" href="/api/workspaces/${encodeURIComponent(req.params.id)}/visual-overrides.css">`;
+      const visualScript = `<script>(()=>{let enabled=false;const pathFor=e=>{const parts=[];let n=e;while(n&&n.nodeType===1&&n!==document.documentElement){let part=n.tagName.toLowerCase();if(n.id){part+='#'+n.id;parts.unshift(part);break;}if(n.classList&&n.classList.length)part+='.'+[...n.classList].slice(0,2).join('.');const p=n.parentElement;if(p){const same=[...p.children].filter(x=>x.tagName===n.tagName);if(same.length>1)part+=':nth-of-type('+(same.indexOf(n)+1)+')';}parts.unshift(part);n=p;}return parts.join(' > ')};document.addEventListener('click',e=>{if(!enabled)return;const el=e.target;if(!(el instanceof Element))return;e.preventDefault();e.stopPropagation();document.querySelectorAll('[data-um-selected]').forEach(x=>{x.style.outline='';x.removeAttribute('data-um-selected')});el.setAttribute('data-um-selected','1');el.style.outline='2px solid #6366f1';parent.postMessage({type:'um-visual-select',selector:pathFor(el),tag:el.tagName.toLowerCase(),text:(el.innerText||'').slice(0,300),color:getComputedStyle(el).color,background:getComputedStyle(el).backgroundColor,fontSize:parseFloat(getComputedStyle(el).fontSize)||16,padding:parseFloat(getComputedStyle(el).paddingTop)||0,radius:parseFloat(getComputedStyle(el).borderRadius)||0},'*');},true);addEventListener('message',e=>{if(e.source!==parent||!e.data||e.data.type!=='um-visual-mode')return;enabled=!!e.data.enabled;document.documentElement.style.cursor=enabled?'crosshair':'';if(!enabled)document.querySelectorAll('[data-um-selected]').forEach(x=>{x.style.outline='';x.removeAttribute('data-um-selected')});});})();<\/script>`;
+      if (/<head[^>]*>/i.test(html)) html = html.replace(/<head([^>]*)>/i, `<head$1>${visualCss}${visualScript}`);
       res.type('html').send(html);
       return;
     }

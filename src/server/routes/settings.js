@@ -33,6 +33,26 @@ export function settingsRouter() {
     });
   });
 
+  router.get('/diagnostics', async (_req, res) => {
+    const cache = getCachedModels();
+    const settings = getRuntimeSettings();
+    const diskPath = process.env.RUNTIME_SETTINGS_PATH || (process.env.RENDER === 'true' ? '/var/data' : '/tmp');
+    let storage = { writable: false, persistentDiskLikely: diskPath.startsWith('/var/data') };
+    try { const fs = await import('node:fs/promises'); await fs.access(diskPath); storage.writable = true; } catch {}
+    res.json({
+      generatedAt: new Date().toISOString(),
+      services: { openCodeReady: isOpenCodeReady(), providerBaseConfigured: Boolean(process.env.CUSTOM_AI_BASE_URL), apiKeyConfigured: Boolean(process.env.CUSTOM_AI_API_KEY), modelCount: (cache.models || []).length, modelDiscovery: cache.source || 'none', modelDiscoveryError: cache.error || null },
+      integrations: { githubConfigured: Boolean(config.github.token), telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN) },
+      settings: { modelRoutingConfigured: Object.keys(settings.modelRouting || {}).filter((key) => Boolean(settings.modelRouting[key])), runtimeSettingsPathConfigured: Boolean(process.env.RUNTIME_SETTINGS_PATH) },
+      storage,
+      warnings: [
+        ...(!storage.persistentDiskLikely ? ['Runtime settings/workspaces may be lost on redeploy unless a persistent disk is mounted.'] : []),
+        ...(!isOpenCodeReady() ? ['OpenCode is not ready; coding tasks may fail until it recovers.'] : []),
+        ...(!process.env.CUSTOM_AI_API_KEY ? ['Provider API key is not configured in the process environment.'] : []),
+      ],
+    });
+  });
+
   router.post('/provider', async (req, res, next) => {
     try {
       const body = req.body || {};
