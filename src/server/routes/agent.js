@@ -16,11 +16,11 @@ export function agentRouter() {
     '/tasks',
     rateLimitMiddleware({ windowMs: 60000, max: 20 }),
     (req, res, next) => {
-      const { workspaceId, prompt, model, mode = 'fast' } = req.body || {};
+      const { workspaceId, prompt, model } = req.body || {};
+      const mode = req.body?.mode === 'plan' ? 'plan' : 'build';
       if (!workspaceId || !prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'workspaceId and prompt are required' });
       }
-      if (!['build', 'plan', 'fast', 'thorough'].includes(mode)) return res.status(400).json({ error: 'mode must be build, plan, fast or thorough' });
       if (prompt.length > 20000) {
         return res.status(413).json({ error: 'Prompt too long (20000 char limit)' });
       }
@@ -35,8 +35,8 @@ export function agentRouter() {
             resolveDefaultModelRef() ||
             config.agent.defaultModel ||
             undefined;
-          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel } });
-          res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null });
+          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode } });
+          res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null, mode });
 
           runAgentTask({
             directory: dir,

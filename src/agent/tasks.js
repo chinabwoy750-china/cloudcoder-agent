@@ -8,7 +8,18 @@ import { ensureOpenCodeReady } from './opencode.js';
  * Create an OpenCode session rooted at `directory` and stream the agent's work.
  * Emits events via onEvent({type, ...}). Resolves with {sessionId}.
  */
-export async function runAgentTask({ directory, prompt, model, mode = 'fast', onEvent = () => {}, signal }) {
+export function buildTaskPrompt(prompt, mode = 'build', planOn = true) {
+  const safeMode = mode === 'plan' ? 'plan' : 'build';
+  const modeInstruction = safeMode === 'plan'
+    ? 'PLAN MODE: Analyze the workspace and the user request. Do not create, edit, delete, or overwrite files. Do not run commands that modify the workspace. Return a concise implementation plan, relevant files, risks, and verification steps. If the request asks for code changes, describe the changes you would make but do not apply them.\n\n'
+    : 'BUILD MODE: Implement the user request in the workspace. Inspect existing code first, make focused changes, run appropriate tests or builds when available, and report exactly what changed and what verification passed or failed.\n\n';
+  const planPrefix = planOn
+    ? 'Before making changes, briefly outline a short plan (3–6 bullets), then execute it in the workspace, then summarize what you did and what remains.\n\n'
+    : '';
+  return modeInstruction + (safeMode === 'plan' ? '' : planPrefix) + 'User request:\n' + prompt;
+}
+
+export async function runAgentTask({ directory, prompt, model, mode = 'build', onEvent = () => {}, signal }) {
   // Never hit OpenCode while it is still booting.
   await ensureOpenCodeReady(45000);
   const session = await oc('POST', '/session', {
@@ -19,20 +30,17 @@ export async function runAgentTask({ directory, prompt, model, mode = 'fast', on
   const sessionId = session.id;
   onEvent({ type: 'session', sessionId, directory });
 
-  // Optional plan-then-act prefix (still a single OpenCode prompt — not a second engine).
-  const planOnly = mode === 'plan';
-  const planOn = mode === 'thorough' || mode === 'build' || (mode !== 'fast' && !planOnly && String(process.env.PLAN_THEN_ACT || 'false').toLowerCase() === 'true');
-  const planPrefix = planOnly
-    ? 'PLAN MODE (READ-ONLY): Do not create, edit, delete, or overwrite any files. Do not run commands that modify the project. Inspect the workspace as needed, then return a clear implementation plan with steps, files likely to change, risks, and verification steps. Stop after presenting the plan.\n\nUser request:\n'
-    : planOn
-      ? 'Before making changes, briefly outline a short plan (3–6 bullets), then implement it in the workspace, run relevant checks when possible, and summarize the files changed and verification results.\n\nUser request:\n'
-      : '';
-  const finalPrompt = planPrefix + prompt;
+  // Build/Plan mode is supplied by the UI. Plan mode asks for analysis only;
+  // build mode retains the optional plan-then-act prefix. This is a model
+  // instruction, not a hard security boundary for tools that can write files.
+  const planOn = String(process.env.PLAN_THEN_ACT || 'true').toLowerCase() !== 'false';
+  const safeMode = mode === 'plan' ? 'plan' : 'build';
+  const finalPrompt = buildTaskPrompt(prompt, safeMode, planOn);
 
   const body = { parts: [{ type: 'text', text: finalPrompt }] };
   const m = splitModel(model || config.agent.defaultModel);
   if (m) body.model = m;
-  logger.info(`Agent task model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} mode=${mode} planThenAct=${planOn}`);
+  logger.info(`Agent task mode=${safeMode} model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} planThenAct=${planOn}`);
 
   await oc('POST', `/session/${sessionId}/prompt_async`, {
     query: { directory },
