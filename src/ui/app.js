@@ -26,6 +26,7 @@ const state = {
   models: [],
   openCodeReady: false,
   modelMeta: { defaultModel: null, source: null, error: null },
+  builderMode: false,
 };
 
 /* ---------------- Utilities ---------------- */
@@ -71,6 +72,56 @@ function renderMarkdown(text) {
     t = t.replace(/\n/g, '<br>');
     return t;
   }).join('');
+}
+
+
+
+function buildWebsiteBuilderPrompt(userBrief) {
+  const kind = document.querySelector('#builder-kind')?.value
+    || 'Business website';
+
+  const style = document.querySelector('#builder-style')?.value
+    || 'Premium modern';
+
+  return `
+You are Universal Modder's dedicated website-building agent.
+
+PROJECT TYPE: ${kind}
+VISUAL DIRECTION: ${style}
+
+USER'S WEBSITE BRIEF:
+${userBrief}
+
+Follow the universal-website-builder skill if available.
+Use the available ECC frontend, testing, verification, and
+security skills when relevant.
+
+REQUIRED WORKFLOW:
+
+1. Inspect the existing workspace, framework, package manager,
+   routes, components, and package scripts.
+2. Plan the requested pages, shared layout, visual system,
+   responsive behavior, and important interactions.
+3. Implement the complete requested experience in the existing
+   project. Do not merely return a tutorial or code snippets.
+4. Reuse the current stack and dependencies wherever practical.
+5. Make the design polished, coherent, accessible, and responsive.
+6. Implement working interactions where the available backend
+   supports them. Do not fake persistent backend features.
+7. Run appropriate build and test commands if available.
+8. Fix errors caused by your changes, within reasonable limits.
+9. Review the diff and preserve unrelated functionality.
+
+Do not delete the project and regenerate it from scratch.
+Do not claim tests passed unless you actually ran them.
+Do not claim the site is deployed or previewed unless verified.
+
+Finish with:
+- Pages and features implemented
+- Important files changed
+- Build/test results
+- Known limitations or remaining work
+`.trim();
 }
 
 function toast(message, kind = '') {
@@ -164,6 +215,48 @@ $$('.nav-btn').forEach((btn) => {
     closeDrawers();
   });
 });
+
+
+document.querySelectorAll('[data-builder-example]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const input = document.querySelector('#builder-prompt');
+    if (input) {
+      input.value = button.dataset.builderExample || '';
+      input.focus();
+    }
+  });
+});
+
+document.querySelector('#builder-form')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+
+  if (!state.workspaceId) {
+    toast('Create or select a workspace first', 'err');
+    return;
+  }
+
+  if (!state.openCodeReady) {
+    toast('OpenCode is still starting', 'err');
+    return;
+  }
+
+  const brief = document.querySelector('#builder-prompt')?.value.trim();
+
+  if (!brief) {
+    toast('Describe the website you want to build', 'err');
+    return;
+  }
+
+  const prompt = document.querySelector('#prompt');
+  prompt.value = brief;
+
+  state.builderMode = true;
+
+  // Reuse the existing task system and live task stream.
+  document.querySelector('[data-view="chat"]').click();
+  document.querySelector('#composer').requestSubmit();
+});
+
 
 
 /* ---------------- Composer enablement (workspace-first + readiness) ---------------- */
@@ -511,16 +604,30 @@ $('#composer').addEventListener('submit', async (e) => {
   $('#cancel-btn').classList.remove('hidden');
   updateComposerState();
 
+  const isBuilder = state.builderMode;
+  const taskPrompt = isBuilder
+    ? buildWebsiteBuilderPrompt(prompt)
+    : prompt;
+
+  const requestedMode = $('#task-mode')?.value || 'fast';
+  const mode = isBuilder ? 'thorough' : requestedMode;
+
   try {
     const model = $('#model-select').value || undefined;
-    const mode = $('#task-mode')?.value || 'fast';
     const { jobId } = await api('/api/agent/tasks', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: state.workspaceId, prompt, model, mode }),
+      body: JSON.stringify({
+        workspaceId: state.workspaceId,
+        prompt: taskPrompt,
+        model,
+        mode,
+      }),
     });
+    state.builderMode = false;
     state.jobId = jobId;
     streamJob(jobId);
   } catch (err) {
+    state.builderMode = false;
     addMessage('tool', `Error: ${err.message}`);
     state.jobId = null;
     $('#cancel-btn').classList.add('hidden');

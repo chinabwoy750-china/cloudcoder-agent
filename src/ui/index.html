@@ -76,6 +76,16 @@
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span>Chat</span>
       </button>
+      <button class="nav-btn" data-view="builder" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+        <span>Website Builder</span>
+      </button>
       <button class="nav-btn" data-view="repos" type="button">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         <span>Repositories</span>
@@ -181,6 +191,119 @@
             <span id="char-count" class="char-count" hidden>0</span>
           </div>
         </form>
+      </div>
+    </section>
+
+
+    <!-- WEBSITE BUILDER -->
+    <section id="view-builder" class="view hidden">
+      <div class="builder-shell">
+        <header class="builder-heading">
+          <div>
+            <span class="builder-eyebrow">UNIVERSAL STUDIO</span>
+            <h1>What are we building today?</h1>
+            <p>Turn your idea into a complete, responsive website.</p>
+          </div>
+          <span class="builder-status">
+            <span class="builder-status-dot"></span>
+            AI builder
+          </span>
+        </header>
+
+        <div class="builder-grid">
+          <form id="builder-form" class="builder-prompt-card">
+            <label for="builder-prompt">Describe your website</label>
+            <textarea
+              id="builder-prompt"
+              rows="6"
+              maxlength="12000"
+              placeholder="Build a modern website for my brand. Include a homepage, about page, services, contact form, and a mobile-friendly navigation..."
+              required
+            ></textarea>
+
+            <div class="builder-field-grid">
+              <label class="builder-field">
+                <span>Project type</span>
+                <select id="builder-kind">
+                  <option value="Business website">Business website</option>
+                  <option value="SaaS web app">SaaS web app</option>
+                  <option value="E-commerce website">E-commerce</option>
+                  <option value="Portfolio">Portfolio</option>
+                  <option value="Admin dashboard">Admin dashboard</option>
+                  <option value="Landing page">Landing page</option>
+                </select>
+              </label>
+
+              <label class="builder-field">
+                <span>Visual style</span>
+                <select id="builder-style">
+                  <option value="Premium modern">Premium modern</option>
+                  <option value="Minimal and editorial">Minimal and editorial</option>
+                  <option value="Modern dark interface">Modern dark</option>
+                  <option value="Bold and expressive">Bold and expressive</option>
+                  <option value="Clean SaaS design">Clean SaaS</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="builder-note">
+              <span class="builder-note-icon">✦</span>
+              <span>
+                Universal Modder will inspect your project, plan the pages,
+                build reusable components, and verify the result.
+              </span>
+            </div>
+
+            <button class="builder-submit" type="submit">
+              <span>Build my website</span>
+              <span aria-hidden="true">↗</span>
+            </button>
+
+            <p class="builder-footnote">
+              Uses your selected workspace and configured AI model.
+            </p>
+          </form>
+
+          <section class="builder-preview-card" aria-label="Preview area">
+            <header class="preview-toolbar">
+              <div class="preview-dots" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <span>Website preview</span>
+              <span class="preview-device">Desktop</span>
+            </header>
+
+            <div class="preview-empty" id="builder-preview-empty">
+              <div class="preview-icon">⌘</div>
+              <h2>Your next website starts here</h2>
+              <p>
+                Describe your idea and Universal Modder will start building
+                inside your selected workspace.
+              </p>
+              <div class="preview-steps">
+                <div><span>01</span> Plan pages and layout</div>
+                <div><span>02</span> Build the components</div>
+                <div><span>03</span> Run checks and refine</div>
+              </div>
+              <span class="preview-coming">
+                Live preview engine: next integration step
+              </span>
+            </div>
+          </section>
+        </div>
+
+        <div class="builder-examples">
+          <span>Start with an idea</span>
+          <button type="button" data-builder-example="Build a premium landing page for an AI startup with a hero, features, pricing, testimonials, FAQ, and a responsive navigation.">
+            AI startup landing page
+          </button>
+          <button type="button" data-builder-example="Build a modern online clothing store with a product catalog, category filters, product details, and a shopping cart interface.">
+            Online store
+          </button>
+          <button type="button" data-builder-example="Build a polished SaaS dashboard with a sidebar, analytics cards, charts, activity feed, and responsive navigation.">
+            SaaS dashboard
+          </button>
+        </div>
       </div>
     </section>
 
