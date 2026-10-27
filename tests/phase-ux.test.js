@@ -15,21 +15,27 @@ after(() => {
   Object.assign(process.env, SAVED);
 });
 
-test('UI has workspace-first empty state and model meta hooks', () => {
+test('UI has Lovable-style composer, preview and model admin hooks', () => {
   const html = fs.readFileSync(path.join(root, 'src/ui/index.html'), 'utf8');
   assert.ok(html.includes('id="empty-title"'));
-  assert.ok(html.includes('Select a workspace first') || html.includes('empty-title'));
+  assert.ok(html.includes('What\'s on your mind?') || html.includes('empty-title'));
+  assert.ok(html.includes('id="preview-toggle"'));
+  assert.ok(html.includes('id="preview-frame"'));
+  assert.ok(html.includes('id="model-routing-form"'));
   assert.ok(html.includes('id="settings-model"'));
   assert.ok(html.includes('id="model-meta"'));
   assert.ok(html.includes('id="meta-opencode"'));
-  assert.ok(html.includes('id="prompt"') && html.includes('disabled'));
+  assert.ok(html.includes('id="prompt"'));
 });
 
-test('app.js gates composer on workspace and readiness', () => {
+test('app.js gates composer on readiness and creates a workspace on first prompt', () => {
   const js = fs.readFileSync(path.join(root, 'src/ui/app.js'), 'utf8');
   assert.ok(js.includes('function updateComposerState'));
   assert.ok(js.includes('/api/models'));
   assert.ok(js.includes('openCodeReady'));
+  assert.ok(js.includes('if (!state.workspaceId)'));
+  assert.ok(js.includes('PLAN MODE:'));
+  assert.ok(js.includes('BUILD MODE:'));
   assert.ok(js.includes("role === 'user'") || js.includes('role === "user"') || js.includes("ev.role === 'user'"));
 });
 

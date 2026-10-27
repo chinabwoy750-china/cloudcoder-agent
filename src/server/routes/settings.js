@@ -28,6 +28,7 @@ export function settingsRouter() {
       account: { username: config.auth.username || '', passwordOverride: Boolean(getRuntimeSettings().passwordHash || getRuntimeSettings().password) },
       integrations: { hasGithubToken: Boolean(config.github.token) },
       openCodeReady: isOpenCodeReady(),
+      modelRouting: getRuntimeSettings().modelRouting || {},
       persistence: 'runtime-file',
     });
   });
@@ -71,6 +72,19 @@ export function settingsRouter() {
     } catch (err) {
       next(err);
     }
+  });
+
+  router.post('/model-routing', async (req, res) => {
+    const body = req.body || {};
+    const keys = ['build', 'plan', 'image', 'video', 'audio'];
+    const modelRouting = {};
+    for (const key of keys) {
+      const value = typeof body[key] === 'string' ? body[key].trim() : '';
+      if (value.length > 200) return res.status(400).json({ error: `${key} model ID must be 200 characters or fewer` });
+      modelRouting[key] = value;
+    }
+    await saveRuntimeSettings({ modelRouting });
+    res.json({ ok: true, message: 'Model routing saved.', modelRouting });
   });
 
   router.post('/integrations', async (req, res) => {

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import multer from 'multer';
 import { config } from '../../config/env.js';
 import * as ws from '../../workspace/manager.js';
@@ -133,6 +135,44 @@ export function filesRouter() {
       await fs.rm(zip.path, { force: true }).catch(() => {});
       if (err && !res.headersSent) res.status(500).end();
     });
+  }));
+
+
+  // Serve the project's real built/static output inside the authenticated preview iframe.
+  // Prefer framework build directories; fall back to a root index.html for static projects.
+  router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
+    const dir = await ws.resolveWorkspace(req.params.id);
+    const candidates = [path.join(dir, 'dist'), path.join(dir, 'build'), path.join(dir, 'out'), dir];
+    let root = dir;
+    for (const candidate of candidates) {
+      try { const st = await fs.stat(path.join(candidate, 'index.html')); if (st.isFile()) { root = candidate; break; } } catch {}
+    }
+    const requested = String(req.params[0] || '').replace(/\\/g, '/');
+    if (requested.split('/').some((part) => part === '..' || part.startsWith('.'))) {
+      return res.status(400).json({ error: 'Invalid preview path' });
+    }
+    let target = path.resolve(root, requested || 'index.html');
+    const rootReal = await fs.realpath(root);
+    try {
+      let real = await fs.realpath(target);
+      if (real !== rootReal && !real.startsWith(rootReal + path.sep)) return res.status(403).json({ error: 'Preview path escapes project' });
+      const st = await fs.stat(real);
+      if (!st.isFile()) throw new Error('Not a file');
+      target = real;
+    } catch {
+      if (requested && !requested.endsWith('/')) return res.status(404).json({ error: `Preview asset not found: ${requested}` });
+      target = path.join(root, 'index.html');
+      if (!(await fs.stat(target).catch(() => null))?.isFile()) return res.status(404).json({ error: 'No index.html found. Build the project first or add an index.html file.' });
+    }
+    if (path.basename(target).toLowerCase() === 'index.html') {
+      let html = await fs.readFile(target, 'utf8');
+      const prefix = `/api/workspaces/${encodeURIComponent(req.params.id)}/preview/`;
+      if (!/<base\s/i.test(html)) html = html.replace(/<head([^>]*)>/i, `<head$1><base href="${prefix}">`);
+      html = html.replace(/(src|href|action)=(['"])\/(?!\/)/gi, `$1=$2${prefix}`);
+      res.type('html').send(html);
+      return;
+    }
+    res.sendFile(target);
   }));
 
   // Run a named project action (test / build / install).

@@ -26,7 +26,9 @@ const state = {
   models: [],
   openCodeReady: false,
   modelMeta: { defaultModel: null, source: null, error: null },
+  previewOpen: false,
   builderMode: false,
+  modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
 };
 
 /* ---------------- Utilities ---------------- */
@@ -72,56 +74,6 @@ function renderMarkdown(text) {
     t = t.replace(/\n/g, '<br>');
     return t;
   }).join('');
-}
-
-
-
-function buildWebsiteBuilderPrompt(userBrief) {
-  const kind = document.querySelector('#builder-kind')?.value
-    || 'Business website';
-
-  const style = document.querySelector('#builder-style')?.value
-    || 'Premium modern';
-
-  return `
-You are Universal Modder's dedicated website-building agent.
-
-PROJECT TYPE: ${kind}
-VISUAL DIRECTION: ${style}
-
-USER'S WEBSITE BRIEF:
-${userBrief}
-
-Follow the universal-website-builder skill if available.
-Use the available ECC frontend, testing, verification, and
-security skills when relevant.
-
-REQUIRED WORKFLOW:
-
-1. Inspect the existing workspace, framework, package manager,
-   routes, components, and package scripts.
-2. Plan the requested pages, shared layout, visual system,
-   responsive behavior, and important interactions.
-3. Implement the complete requested experience in the existing
-   project. Do not merely return a tutorial or code snippets.
-4. Reuse the current stack and dependencies wherever practical.
-5. Make the design polished, coherent, accessible, and responsive.
-6. Implement working interactions where the available backend
-   supports them. Do not fake persistent backend features.
-7. Run appropriate build and test commands if available.
-8. Fix errors caused by your changes, within reasonable limits.
-9. Review the diff and preserve unrelated functionality.
-
-Do not delete the project and regenerate it from scratch.
-Do not claim tests passed unless you actually ran them.
-Do not claim the site is deployed or previewed unless verified.
-
-Finish with:
-- Pages and features implemented
-- Important files changed
-- Build/test results
-- Known limitations or remaining work
-`.trim();
 }
 
 function toast(message, kind = '') {
@@ -217,48 +169,6 @@ $$('.nav-btn').forEach((btn) => {
 });
 
 
-document.querySelectorAll('[data-builder-example]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const input = document.querySelector('#builder-prompt');
-    if (input) {
-      input.value = button.dataset.builderExample || '';
-      input.focus();
-    }
-  });
-});
-
-document.querySelector('#builder-form')?.addEventListener('submit', (event) => {
-  event.preventDefault();
-
-  if (!state.workspaceId) {
-    toast('Create or select a workspace first', 'err');
-    return;
-  }
-
-  if (!state.openCodeReady) {
-    toast('OpenCode is still starting', 'err');
-    return;
-  }
-
-  const brief = document.querySelector('#builder-prompt')?.value.trim();
-
-  if (!brief) {
-    toast('Describe the website you want to build', 'err');
-    return;
-  }
-
-  const prompt = document.querySelector('#prompt');
-  prompt.value = brief;
-
-  state.builderMode = true;
-
-  // Reuse the existing task system and live task stream.
-  document.querySelector('[data-view="chat"]').click();
-  document.querySelector('#composer').requestSubmit();
-});
-
-
-
 /* ---------------- Composer enablement (workspace-first + readiness) ---------------- */
 
 function updateComposerState() {
@@ -273,28 +183,31 @@ function updateComposerState() {
   const hasWs = Boolean(state.workspaceId);
   const ready = state.openCodeReady;
   const busy = Boolean(state.jobId);
-  const canType = hasWs && !busy;
-  const canSend = hasWs && ready && !busy && Boolean(prompt?.value.trim());
+  const canType = ready && !busy;
+  const canSend = ready && !busy && Boolean(prompt?.value.trim());
 
   if (prompt) {
     prompt.disabled = !canType;
-    prompt.placeholder = !hasWs
-      ? 'Select a workspace to start…'
-      : !ready
-        ? 'OpenCode is starting… try again in a moment'
-        : 'Tell Universal Modder what to change…';
+    prompt.placeholder = !ready
+      ? 'Connecting to the coding engine…'
+      : hasWs
+        ? 'Tell Universal Modder what to change…'
+        : 'Describe what you want to build…';
   }
   if (send) send.disabled = !canSend;
   if (attach) attach.disabled = !hasWs || busy;
   if (modelSel) modelSel.disabled = busy;
   const modeSel = $('#task-mode'); if (modeSel) modeSel.disabled = busy;
-
+  const app = $('#app');
+  if (app) app.classList.toggle('home-mode', !hasWs && !state.previewOpen);
+  const projectTitle = $('#project-title');
+  if (projectTitle) projectTitle.textContent = hasWs ? (state.workspaces.find((w) => w.id === state.workspaceId)?.name || 'Project') : 'Universal Modder';
   if (emptyTitle && emptyCopy && !hasWs) {
-    emptyTitle.textContent = 'Select a workspace first';
-    emptyCopy.textContent = 'Import a web app from GitHub or ZIP, then ask Universal Modder to inspect, fix, redesign, refactor or test it.';
+    emptyTitle.textContent = "What's on your mind?";
+    emptyCopy.textContent = 'Describe the website or web app you want to create.';
   } else if (emptyTitle && emptyCopy && hasWs) {
-    emptyTitle.textContent = 'Ready when you are';
-    emptyCopy.textContent = 'Tell Universal Modder what to change in this web app. For example: “Make the landing page mobile-friendly and run the tests.”';
+    emptyTitle.textContent = 'What would you like to change?';
+    emptyCopy.textContent = 'Ask Universal Modder to build, redesign, debug or improve this project.';
   }
   if (suggestions) suggestions.classList.toggle('disabled', !hasWs);
 }
@@ -352,6 +265,8 @@ async function selectWorkspace(id) {
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);
   if (wsPill) { wsPill.hidden = false; wsPill.textContent = selectedMeta?.name || id; }
+  const title = $('#project-title'); if (title) title.textContent = selectedMeta?.name || 'Project';
+  if (state.previewOpen) refreshPreview(false);
 
   const info = await api(`/api/workspaces/${id}`).catch(() => null);
   const dl = $('#ws-info');
@@ -594,8 +509,14 @@ $('#composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('#prompt').value.trim();
   if (!prompt) return;
-  if (!state.workspaceId) return toast('Select or create a workspace first', 'err');
-  if (!state.openCodeReady) return toast('OpenCode is still starting — wait a few seconds', 'err');
+  if (!state.openCodeReady) return toast('The coding engine is still starting — wait a few seconds', 'err');
+  if (!state.workspaceId) {
+    try {
+      const created = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: prompt.slice(0, 48).replace(/\s+/g, ' ').trim() || 'New project' }) });
+      await refreshWorkspaces();
+      await selectWorkspace(created.workspaceId);
+    } catch (err) { return toast(`Could not create project: ${err.message}`, 'err'); }
+  }
 
   addMessage('user', prompt);
   $('#prompt').value = '';
@@ -604,24 +525,22 @@ $('#composer').addEventListener('submit', async (e) => {
   $('#cancel-btn').classList.remove('hidden');
   updateComposerState();
 
-  const isBuilder = state.builderMode;
-  const taskPrompt = isBuilder
-    ? buildWebsiteBuilderPrompt(prompt)
-    : prompt;
-
-  const requestedMode = $('#task-mode')?.value || 'fast';
-  const mode = isBuilder ? 'build' : requestedMode;
-
   try {
-    const model = $('#model-select').value || undefined;
+    const composerMode = $('#task-mode')?.value || 'build';
+    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select').value || undefined;
+    const isBuilder = state.builderMode;
+    const mode = isBuilder ? 'build' : (composerMode === 'plan' ? 'plan' : 'build');
+    let modePrompt;
+    if (isBuilder) {
+      modePrompt = buildWebsiteBuilderPrompt(prompt);
+    } else if (composerMode === 'plan') {
+      modePrompt = `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`;
+    } else {
+      modePrompt = `BUILD MODE: Implement the requested changes in the project, then run appropriate checks and report what was verified.\n\nUser request: ${prompt}`;
+    }
     const { jobId } = await api('/api/agent/tasks', {
       method: 'POST',
-      body: JSON.stringify({
-        workspaceId: state.workspaceId,
-        prompt: taskPrompt,
-        model,
-        mode,
-      }),
+      body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, mode }),
     });
     state.builderMode = false;
     state.jobId = jobId;
@@ -634,69 +553,6 @@ $('#composer').addEventListener('submit', async (e) => {
     updateComposerState();
   }
 });
-
-
-
-async function generateMedia(kind) {
-  const prompt = ($('#prompt')?.value || '').trim();
-  if (!prompt) return toast('Enter a prompt first', 'err');
-  const imageBtn = $('#generate-image-btn');
-  const audioBtn = $('#generate-audio-btn');
-  if (kind === 'image' && imageBtn) { imageBtn.disabled = true; imageBtn.textContent = 'Working…'; }
-  if (kind === 'audio' && audioBtn) { audioBtn.disabled = true; audioBtn.textContent = 'Working…'; }
-  try {
-    if (kind === 'image') {
-      const models = await api('/api/media/models/all');
-      const list = models?.models || models?.data || {};
-      const imageModels = Array.isArray(list.image) ? list.image : (Array.isArray(list.images) ? list.images : []);
-      const model = imageModels[0]?.id || imageModels[0]?.model || imageModels[0]?.name || 'logfare/flux-1-schnell';
-      const result = await api('/api/media/image-generation', {
-        method: 'POST',
-        body: JSON.stringify({ model, prompt, n: 1 }),
-      });
-      const item = result?.data?.[0] || result?.images?.[0] || result?.data || result;
-      const src = item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : item?.image_url);
-      if (src) {
-        const msg = addMessage('agent', '');
-        msg.innerHTML = `<div class="generated-media"><strong>Generated image</strong><img alt="Generated from your prompt" src="${escapeHtml(src)}" /></div>`;
-      } else {
-        addMessage('tool', `Image endpoint responded: ${JSON.stringify(result).slice(0, 1200)}`);
-      }
-      toast('Image generation request finished.', 'ok');
-    } else {
-      const blobResponse = await fetch('/api/media/audio', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CloudCoder-CSRF': '1',
-        },
-        body: JSON.stringify({ model: 'logfare/melotts', input: prompt, voice: 'alloy' }),
-      });
-      if (!blobResponse.ok) {
-        let message = `HTTP ${blobResponse.status}`;
-        try { message = (await blobResponse.json()).error || message; } catch {}
-        throw new Error(message);
-      }
-      const blob = await blobResponse.blob();
-      const url = URL.createObjectURL(blob);
-      const msg = addMessage('agent', '');
-      msg.innerHTML = '<div class="generated-media"><strong>Generated audio</strong><audio controls></audio><a download="universal-modder-audio.mp3">Download audio</a></div>';
-      msg.querySelector('audio').src = url;
-      msg.querySelector('a').href = url;
-      toast('Audio generated.', 'ok');
-    }
-  } catch (err) {
-    addMessage('tool', `Media generation failed: ${err.message}`);
-    toast(err.message, 'err');
-  } finally {
-    if (imageBtn) { imageBtn.disabled = false; imageBtn.innerHTML = '✦ Image'; }
-    if (audioBtn) { audioBtn.disabled = false; audioBtn.innerHTML = '♫ Audio'; }
-  }
-}
-
-$('#generate-image-btn')?.addEventListener('click', () => generateMedia('image'));
-$('#generate-audio-btn')?.addEventListener('click', () => generateMedia('audio'));
 
 // Enter to send, Shift+Enter for newline
 $('#prompt').addEventListener('keydown', (e) => {
@@ -742,6 +598,7 @@ function streamJob(jobId) {
       updateComposerState();
       refreshStatus();
       refreshFiles();
+      if (state.previewOpen) refreshPreview(false);
     }
   };
   es.onerror = () => {
@@ -883,6 +740,107 @@ $('#settings-model')?.addEventListener('change', () => {
   if (sel && sel.value !== v) sel.value = v;
 });
 
+
+
+function buildWebsiteBuilderPrompt(userBrief) {
+  const kind = document.querySelector('#builder-kind')?.value || 'Business website';
+  const style = document.querySelector('#builder-style')?.value || 'Premium modern';
+  return `
+You are Universal Modder's dedicated website-building agent.
+
+PROJECT TYPE: ${kind}
+VISUAL DIRECTION: ${style}
+
+USER'S WEBSITE BRIEF:
+${userBrief}
+
+Follow the universal-website-builder skill if available.
+Use the available ECC frontend, testing, verification, and
+security skills when relevant.
+
+REQUIRED WORKFLOW:
+
+1. Inspect the existing workspace, framework, package manager,
+   routes, components, and package scripts.
+2. Plan the requested pages, shared layout, visual system,
+   responsive behavior, and important interactions.
+3. Implement the complete requested experience in the existing
+   project. Do not merely return a tutorial or code snippets.
+4. Reuse the current stack and dependencies wherever practical.
+5. Make the design polished, coherent, accessible, and responsive.
+6. Implement working interactions where the available backend
+   supports them. Do not fake persistent backend features.
+7. Run appropriate build and test commands if available.
+8. Fix errors caused by your changes, within reasonable limits.
+9. Review the diff and preserve unrelated functionality.
+
+Do not delete the project and regenerate it from scratch.
+Do not claim tests passed unless you actually ran them.
+Do not claim the site is deployed or previewed unless verified.
+
+Finish with:
+- Pages and features implemented
+- Important files changed
+- Build/test results
+- Known limitations or remaining work
+`.trim();
+}
+
+/* ---------------- Project preview ---------------- */
+function openPreview() {
+  if (!state.workspaceId) return toast('Create a project first to open its preview', 'err');
+  state.previewOpen = true;
+  $('#preview-view')?.classList.remove('hidden');
+  updateComposerState();
+  refreshPreview(false);
+}
+function closePreview() {
+  state.previewOpen = false;
+  $('#preview-view')?.classList.add('hidden');
+  updateComposerState();
+}
+async function refreshPreview(showToast = true) {
+  if (!state.workspaceId) return;
+  const frame = $('#preview-frame');
+  const empty = $('#preview-empty');
+  const status = $('#preview-status');
+  const url = `/api/workspaces/${encodeURIComponent(state.workspaceId)}/preview/`;
+  if (status) status.textContent = 'Loading project files…';
+  try {
+    const res = await fetch(url, { credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+    if (!res.ok) {
+      const info = await res.json().catch(() => ({}));
+      throw new Error(info.error || `Preview returned HTTP ${res.status}`);
+    }
+    if (frame) { frame.hidden = false; frame.src = `${url}?t=${Date.now()}`; }
+    if (empty) empty.hidden = true;
+    if (status) status.textContent = 'Project preview';
+  } catch (err) {
+    if (frame) frame.hidden = true;
+    if (empty) { empty.hidden = false; empty.innerHTML = `<div class="preview-empty-icon">↗</div><h3>Preview isn't ready yet</h3><p>${escapeHtml(err.message)}. Try Build & preview after creating the app.</p>`; }
+    if (status) status.textContent = 'Not ready';
+    if (showToast) toast(err.message, 'err');
+  }
+}
+$('#preview-toggle')?.addEventListener('click', () => state.previewOpen ? closePreview() : openPreview());
+$('#preview-close')?.addEventListener('click', closePreview);
+$('#preview-reload')?.addEventListener('click', () => refreshPreview(true));
+$('#preview-build')?.addEventListener('click', async () => {
+  if (!state.workspaceId) return toast('Create a project first', 'err');
+  const btn = $('#preview-build'); btn.disabled = true; btn.textContent = 'Building…';
+  const status = $('#preview-status'); if (status) status.textContent = 'Running build…';
+  try {
+    const result = await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/actions/build`, { method: 'POST', body: '{}' });
+    if (!result.supported) throw new Error(result.reason || 'Build is not supported for this project');
+    if (!result.ok) throw new Error((result.results || []).map((r) => r.stderr || r.stdout || `Exit code ${r.code}`).join('\n').slice(0, 700) || 'Build failed');
+    toast('Build completed. Loading preview…', 'ok');
+    await refreshPreview(true);
+  } catch (err) {
+    if (status) status.textContent = 'Build failed';
+    toast(`Build failed: ${err.message}`, 'err');
+  } finally { btn.disabled = false; btn.textContent = 'Build & preview'; }
+});
+
 /* ---------------- Site-managed settings ---------------- */
 async function loadSiteSettings() {
   try {
@@ -895,6 +853,10 @@ async function loadSiteSettings() {
     $('#provider-model-name').value = p.modelName || '';
     $('#provider-api-key').value = '';
     $('#provider-api-key').placeholder = p.hasApiKey ? 'Saved API key is configured — leave blank to keep it' : 'Paste your API key';
+    state.modelRouting = { build: '', plan: '', image: '', video: '', audio: '', ...(data.modelRouting || {}) };
+    for (const key of ['build', 'plan', 'image', 'video', 'audio']) {
+      const field = $(`#routing-${key}`); if (field) field.value = state.modelRouting[key] || '';
+    }
     $('#account-username').value = data.account?.username || '';
     const ghStatus = $('#github-token-status');
     if (ghStatus) { ghStatus.textContent = data.integrations?.hasGithubToken ? 'Token configured' : 'Not configured'; ghStatus.classList.toggle('ready', Boolean(data.integrations?.hasGithubToken)); }
@@ -906,6 +868,19 @@ async function loadSiteSettings() {
     if (dl) dl.innerHTML = (p.models || []).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
   } catch (err) { toast(`Could not load settings: ${err.message}`, 'err'); }
 }
+
+$('#model-routing-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#model-routing-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const modelRouting = {};
+    for (const key of ['build', 'plan', 'image', 'video', 'audio']) modelRouting[key] = $(`#routing-${key}`).value.trim();
+    const result = await api('/api/settings/model-routing', { method: 'POST', body: JSON.stringify(modelRouting) });
+    state.modelRouting = result.modelRouting || modelRouting;
+    toast(result.message || 'Model routing saved', 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
+});
 
 $('#provider-settings-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -978,6 +953,7 @@ function autoGrow() {
 }
 
 $('#prompt')?.addEventListener('input', autoGrow);
+$('#task-mode')?.addEventListener('change', () => { const label = $('#send-btn .send-label'); if (label) label.textContent = $('#task-mode').value === 'plan' ? 'Plan' : 'Build'; });
 
 /* ---------------- Connection status ---------------- */
 
@@ -1023,3 +999,36 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+document.querySelectorAll('[data-builder-example]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const input = document.querySelector('#builder-prompt');
+    if (input) {
+      input.value = button.dataset.builderExample || '';
+      input.focus();
+    }
+  });
+});
+
+document.querySelector('#builder-form')?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!state.workspaceId) {
+    toast('Create or select a workspace first', 'err');
+    return;
+  }
+  if (!state.openCodeReady) {
+    toast('OpenCode is still starting', 'err');
+    return;
+  }
+  const brief = document.querySelector('#builder-prompt')?.value.trim();
+  if (!brief) {
+    toast('Describe the website you want to build', 'err');
+    return;
+  }
+  const promptEl = document.querySelector('#prompt');
+  if (promptEl) promptEl.value = brief;
+  state.builderMode = true;
+  document.querySelector('[data-view="chat"]')?.click();
+  document.querySelector('#composer')?.requestSubmit();
+});
+
