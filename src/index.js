@@ -4,9 +4,11 @@ import { startOpenCode, waitForOpenCode, stopOpenCode } from './agent/opencode.j
 import { createApp } from './server/app.js';
 import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 import { fetchCustomModels } from './config/custom-models.js';
+import { loadRuntimeSettings } from './config/runtime-settings.js';
 
 async function main() {
   logger.info(`Universal Modder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
+  await loadRuntimeSettings();
 
   // Strip non-ASCII from API key early — HTTP Authorization headers reject code points > 255
   // (e.g. bullet • U+2022 sometimes pasted into Render env vars).

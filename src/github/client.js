@@ -4,6 +4,8 @@ import { logger } from '../utils/logger.js';
 
 let client = null;
 
+export function resetOctokit() { client = null; }
+
 export function getOctokit() {
   if (!config.github.token) return null;
   if (client) return client;

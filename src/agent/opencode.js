@@ -204,3 +204,23 @@ export function stopOpenCode() {
     setTimeout(() => proc && proc.kill('SIGKILL'), 5000);
   }
 }
+
+
+/** Restart OpenCode to apply site-managed provider/model settings. */
+export async function restartOpenCode(maxWaitMs = 90000) {
+  ready = false;
+  shuttingDown = true;
+  const current = proc;
+  if (current && current.exitCode === null) {
+    await new Promise((resolve) => {
+      const timer = setTimeout(() => { try { current.kill('SIGKILL'); } catch {} resolve(); }, 6000);
+      current.once('exit', () => { clearTimeout(timer); resolve(); });
+      try { current.kill('SIGTERM'); } catch { clearTimeout(timer); resolve(); }
+    });
+  }
+  proc = null;
+  shuttingDown = false;
+  lastExit = null;
+  startOpenCode();
+  return waitForOpenCode(maxWaitMs);
+}

@@ -10,6 +10,7 @@ import { agentRouter } from './routes/agent.js';
 import { githubRouter } from './routes/github.js';
 import { filesRouter } from './routes/files.js';
 import { modelsRouter } from './routes/models.js';
+import { settingsRouter } from './routes/settings.js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { rateLimitMiddleware } from '../utils/ratelimit.js';
@@ -64,6 +65,7 @@ export function createApp() {
 
   app.use('/api/agent', agentRouter());
   app.use('/api/models', modelsRouter());
+  app.use('/api/settings', settingsRouter());
   app.use('/api/github', githubRouter());
   app.use('/api', filesRouter());
 

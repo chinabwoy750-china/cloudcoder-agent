@@ -30,19 +30,26 @@ export function filesRouter() {
 
   router.get('/workspaces', asyncH(async (req, res) => {
     const ids = await ws.listWorkspaces();
-    const stats = await Promise.all(ids.map((id) => ws.workspaceStats(id).catch(() => ({ id, files: 0, bytes: 0 }))));
+    const stats = await Promise.all(ids.map(async (id) => {
+      const base = await ws.workspaceStats(id).catch(() => ({ id, files: 0, bytes: 0 }));
+      const meta = await ws.getWorkspaceMeta(id);
+      return { ...base, name: meta.name || id, createdAt: meta.createdAt || null };
+    }));
     res.json(stats);
   }));
 
   router.post('/workspaces', rateLimitMiddleware({ windowMs: 60000, max: 20 }), asyncH(async (req, res) => {
-    const { id, dir } = await ws.createWorkspace();
-    res.status(201).json({ workspaceId: id, dir });
+    const name = req.body?.name;
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length > 80)) return res.status(400).json({ error: 'Workspace name must be 1–80 characters' });
+    const { id, dir, name: workspaceName } = await ws.createWorkspace(undefined, name || 'Untitled workspace');
+    res.status(201).json({ workspaceId: id, name: workspaceName, dir });
   }));
 
   router.get('/workspaces/:id', asyncH(async (req, res) => {
     const stats = await ws.workspaceStats(req.params.id);
     const project = await detectProjectType(stats.dir);
-    res.json({ ...stats, project, actions: allowedActions(project.type) });
+    const meta = await ws.getWorkspaceMeta(req.params.id);
+    res.json({ ...stats, name: meta.name || req.params.id, createdAt: meta.createdAt || null, project, actions: allowedActions(project.type) });
   }));
 
   router.delete('/workspaces/:id', asyncH(async (req, res) => {

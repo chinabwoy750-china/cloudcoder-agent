@@ -38,12 +38,12 @@ export function githubRouter() {
   router.post('/clone', rateLimitMiddleware({ windowMs: 60000, max: 10 }), async (req, res, next) => {
     let workspaceId = null;
     try {
-      const { owner, repo, branch } = req.body || {};
+      const { owner, repo, branch, workspaceName } = req.body || {};
       if (!owner || !repo) return res.status(400).json({ error: 'owner and repo required' });
       if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
         return res.status(400).json({ error: 'Invalid owner or repo name' });
       }
-      const created = await ws.createWorkspace();
+      const created = await ws.createWorkspace(undefined, workspaceName || repo);
       workspaceId = created.id;
       const dir = created.dir;
       const meta = await repos.getRepository(owner, repo);
@@ -57,7 +57,7 @@ export function githubRouter() {
       }
       const project = await detectProjectType(dir);
       res.json({
-        workspaceId: created.id, owner, repo,
+        workspaceId: created.id, workspaceName: created.name, owner, repo,
         branch: cloned.branch, defaultBranch: meta.defaultBranch, project,
       });
     } catch (e) {

@@ -16,10 +16,11 @@ export function agentRouter() {
     '/tasks',
     rateLimitMiddleware({ windowMs: 60000, max: 20 }),
     (req, res, next) => {
-      const { workspaceId, prompt, model } = req.body || {};
+      const { workspaceId, prompt, model, mode = 'fast' } = req.body || {};
       if (!workspaceId || !prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'workspaceId and prompt are required' });
       }
+      if (!['fast', 'thorough'].includes(mode)) return res.status(400).json({ error: 'mode must be fast or thorough' });
       if (prompt.length > 20000) {
         return res.status(413).json({ error: 'Prompt too long (20000 char limit)' });
       }
@@ -41,6 +42,7 @@ export function agentRouter() {
             directory: dir,
             prompt,
             model: resolvedModel,
+            mode,
             onEvent: (ev) => emit(job, ev),
             signal: job.controller.signal,
           })

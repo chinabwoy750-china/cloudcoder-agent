@@ -160,6 +160,7 @@ $$('.nav-btn').forEach((btn) => {
     $$('.view').forEach((v) => v.classList.toggle('hidden', v.id !== `view-${view}`));
     if (view === 'files') refreshFiles();
     if (view === 'repos') refreshRepos();
+    if (view === 'settings') loadSiteSettings();
     closeDrawers();
   });
 });
@@ -193,6 +194,7 @@ function updateComposerState() {
   if (send) send.disabled = !canSend;
   if (attach) attach.disabled = !hasWs || busy;
   if (modelSel) modelSel.disabled = busy;
+  const modeSel = $('#task-mode'); if (modeSel) modeSel.disabled = busy;
 
   if (emptyTitle && emptyCopy && !hasWs) {
     emptyTitle.textContent = 'Select a workspace first';
@@ -214,22 +216,38 @@ async function refreshWorkspaces() {
   for (const w of state.workspaces) {
     const li = document.createElement('li');
     li.className = 'clickable';
-    li.textContent = `${w.id} · ${w.files} files`;
+    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${w.files} files</span>`;
     li.addEventListener('click', () => selectWorkspace(w.id));
     ul.appendChild(li);
   }
   if (!state.workspaces.length) ul.innerHTML = '<li class="muted small">No workspaces yet</li>';
 }
 
-$('#new-workspace').addEventListener('click', async () => {
+function openWorkspaceModal() {
+  const modal = $('#workspace-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  $('#workspace-name-input').value = '';
+  setTimeout(() => $('#workspace-name-input')?.focus(), 20);
+}
+function closeWorkspaceModal() { $('#workspace-modal')?.classList.add('hidden'); }
+$('#new-workspace').addEventListener('click', openWorkspaceModal);
+$('#workspace-cancel')?.addEventListener('click', closeWorkspaceModal);
+$('#workspace-modal')?.addEventListener('click', (e) => { if (e.target.id === 'workspace-modal') closeWorkspaceModal(); });
+$('#workspace-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('#workspace-name-input').value.trim();
+  if (!name) return;
+  const btn = $('#workspace-form button[type="submit"]');
+  btn.disabled = true;
   try {
-    const res = await api('/api/workspaces', { method: 'POST', body: '{}' });
+    const res = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name }) });
+    closeWorkspaceModal();
     await refreshWorkspaces();
     selectWorkspace(res.workspaceId);
-    toast('Workspace created', 'ok');
-  } catch (err) {
-    toast(err.message, 'err');
-  }
+    toast(`Workspace “${res.name || name}” created`, 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
 });
 
 $('#new-task-btn')?.addEventListener('click', () => {
@@ -239,14 +257,15 @@ $('#new-task-btn')?.addEventListener('click', () => {
 async function selectWorkspace(id) {
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
-  if (wsPill) { wsPill.hidden = false; wsPill.textContent = id; }
+  const selectedMeta = state.workspaces.find((w) => w.id === id);
+  if (wsPill) { wsPill.hidden = false; wsPill.textContent = selectedMeta?.name || id; }
 
   const info = await api(`/api/workspaces/${id}`).catch(() => null);
   const dl = $('#ws-info');
   if (dl) {
     dl.innerHTML = '';
     const rows = [
-      ['Workspace', id],
+      ['Workspace', info?.name || selectedMeta?.name || id],
       ['Project', info?.project?.type || 'unknown'],
       ['Files', String(info?.files ?? '—')],
       ['Size', info ? `${(info.bytes / 1024).toFixed(1)} KB` : '—'],
@@ -433,7 +452,7 @@ function addMessage(role, text, { html = false } = {}) {
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
   avatar.setAttribute('aria-hidden', 'true');
-  avatar.textContent = role === 'user' ? 'YOU' : role === 'tool' ? 'TOOL' : 'AI';
+  avatar.textContent = role === 'user' ? 'Y' : role === 'tool' ? '↳' : '✦';
 
   const content = document.createElement('div');
   content.className = 'msg-content';
@@ -494,9 +513,10 @@ $('#composer').addEventListener('submit', async (e) => {
 
   try {
     const model = $('#model-select').value || undefined;
+    const mode = $('#task-mode')?.value || 'fast';
     const { jobId } = await api('/api/agent/tasks', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: state.workspaceId, prompt, model }),
+      body: JSON.stringify({ workspaceId: state.workspaceId, prompt, model, mode }),
     });
     state.jobId = jobId;
     streamJob(jobId);
@@ -691,6 +711,82 @@ $('#settings-model')?.addEventListener('change', () => {
   persistModel(v);
   const sel = $('#model-select');
   if (sel && sel.value !== v) sel.value = v;
+});
+
+/* ---------------- Site-managed settings ---------------- */
+async function loadSiteSettings() {
+  try {
+    const data = await api('/api/settings');
+    const p = data.provider || {};
+    $('#provider-base-url').value = p.baseURL || '';
+    $('#provider-id').value = p.providerId || 'china-gpt';
+    $('#provider-name').value = p.providerName || 'China-GPT';
+    $('#provider-model').value = p.model || '';
+    $('#provider-model-name').value = p.modelName || '';
+    $('#provider-api-key').value = '';
+    $('#provider-api-key').placeholder = p.hasApiKey ? 'Saved API key is configured — leave blank to keep it' : 'Paste your API key';
+    $('#account-username').value = data.account?.username || '';
+    const ghStatus = $('#github-token-status');
+    if (ghStatus) { ghStatus.textContent = data.integrations?.hasGithubToken ? 'Token configured' : 'Not configured'; ghStatus.classList.toggle('ready', Boolean(data.integrations?.hasGithubToken)); }
+    $('#github-token').value = '';
+    $('#github-token').placeholder = data.integrations?.hasGithubToken ? 'Token saved — leave blank to keep it' : 'Paste a GitHub personal access token';
+    const status = $('#provider-status');
+    if (status) { status.textContent = p.hasApiKey ? `${p.models?.length || 0} models · key set` : 'API key not set'; status.classList.toggle('ready', Boolean(p.hasApiKey)); }
+    const dl = $('#provider-model-options');
+    if (dl) dl.innerHTML = (p.models || []).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+  } catch (err) { toast(`Could not load settings: ${err.message}`, 'err'); }
+}
+
+$('#provider-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#save-provider-settings');
+  btn.disabled = true; btn.textContent = 'Saving & restarting…';
+  try {
+    const result = await api('/api/settings/provider', { method: 'POST', body: JSON.stringify({
+      baseURL: $('#provider-base-url').value.trim(), providerId: $('#provider-id').value.trim(),
+      providerName: $('#provider-name').value.trim(), apiKey: $('#provider-api-key').value,
+      model: $('#provider-model').value.trim(), modelName: $('#provider-model-name').value.trim(),
+    }) });
+    $('#provider-api-key').value = '';
+    toast(result.message || 'Provider updated', 'ok');
+    await loadModels(); await loadSiteSettings();
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Save provider & restart'; }
+});
+
+$('#refresh-provider-models')?.addEventListener('click', async () => {
+  const btn = $('#refresh-provider-models'); btn.disabled = true; btn.textContent = 'Refreshing…';
+  try {
+    const data = await api('/api/models?refresh=1');
+    const dl = $('#provider-model-options');
+    if (dl) dl.innerHTML = (data.models || []).map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`).join('');
+    toast(`Found ${(data.models || []).length} model(s)`, 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Refresh models'; }
+});
+
+$('#github-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#github-settings-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const result = await api('/api/settings/integrations', { method: 'POST', body: JSON.stringify({ githubToken: $('#github-token').value }) });
+    $('#github-token').value = '';
+    toast(result.message || 'GitHub settings saved', 'ok');
+    await loadSiteSettings(); await refreshRepos();
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
+});
+
+$('#account-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#account-settings-form button[type="submit"]'); btn.disabled = true;
+  try {
+    const result = await api('/api/settings/account', { method: 'POST', body: JSON.stringify({ username: $('#account-username').value.trim(), password: $('#account-password').value, useEnvPassword: $('#account-use-env-password').checked }) });
+    $('#account-password').value = '';
+    $('#account-use-env-password').checked = false;
+    toast(result.message || 'Login settings saved', 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+  finally { btn.disabled = false; }
 });
 
 /* ---------------- Composer niceties ---------------- */

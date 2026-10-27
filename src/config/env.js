@@ -98,7 +98,7 @@ export const config = {
   agent: {
     defaultModel: process.env.DEFAULT_MODEL || '',
     taskTimeoutMs: int(process.env.TASK_TIMEOUT_MS, 900000),
-    pollIntervalMs: int(process.env.AGENT_POLL_MS, 1500),
+    pollIntervalMs: int(process.env.AGENT_POLL_MS, 750),
   },
   github: {
     token: process.env.GITHUB_TOKEN || null,

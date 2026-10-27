@@ -2,6 +2,21 @@ import crypto from 'node:crypto';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
+let runtimeCredentials = { username: null, passwordSalt: null, passwordHash: null };
+
+export function clearRuntimePasswordOverride() {
+  runtimeCredentials.passwordSalt = null;
+  runtimeCredentials.passwordHash = null;
+}
+
+export function setRuntimeCredentials(values = {}) {
+  runtimeCredentials = {
+    username: values.username || runtimeCredentials.username,
+    passwordSalt: values.passwordSalt || runtimeCredentials.passwordSalt,
+    passwordHash: values.passwordHash || runtimeCredentials.passwordHash,
+  };
+}
+
 function timingSafeEq(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const ab = Buffer.from(a);
@@ -21,7 +36,13 @@ export function parseBasicHeader(header) {
 }
 
 export function checkCredentials(user, pass) {
-  return timingSafeEq(user, config.auth.username) && timingSafeEq(pass, config.auth.password);
+  const expectedUser = runtimeCredentials.username || config.auth.username;
+  if (!timingSafeEq(user, expectedUser)) return false;
+  if (runtimeCredentials.passwordHash && runtimeCredentials.passwordSalt) {
+    const candidate = crypto.scryptSync(String(pass), runtimeCredentials.passwordSalt, 64).toString('hex');
+    return timingSafeEq(candidate, runtimeCredentials.passwordHash);
+  }
+  return timingSafeEq(pass, config.auth.password);
 }
 
 export function basicAuth(req, res, next) {

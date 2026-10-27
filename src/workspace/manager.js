@@ -5,6 +5,24 @@ import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
 const ROOT = config.limits.workspaceRoot;
+const META_ROOT = `${ROOT}.metadata`;
+
+function cleanWorkspaceName(name, fallback = 'Untitled workspace') {
+  const value = String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+  return value || fallback;
+}
+
+async function writeWorkspaceMeta(id, meta) {
+  await fs.mkdir(META_ROOT, { recursive: true });
+  const file = path.join(META_ROOT, `${safeSegment(id)}.json`);
+  await fs.writeFile(file, JSON.stringify(meta, null, 2), { mode: 0o600 });
+}
+
+export async function getWorkspaceMeta(id) {
+  const safeId = safeSegment(id);
+  try { return JSON.parse(await fs.readFile(path.join(META_ROOT, `${safeId}.json`), 'utf8')); }
+  catch { return { id: safeId, name: safeId, createdAt: null }; }
+}
 
 export function safeSegment(s) {
   return String(s).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 64);
@@ -20,14 +38,16 @@ function withinRoot(p) {
   return resolved === root || resolved.startsWith(root + path.sep);
 }
 
-export async function createWorkspace(id = newWorkspaceId()) {
+export async function createWorkspace(id = newWorkspaceId(), name = 'Untitled workspace') {
   const safeId = safeSegment(id);
   const dir = path.join(ROOT, safeId);
   if (!withinRoot(dir)) throw new Error('Workspace path escapes root');
   await fs.mkdir(ROOT, { recursive: true });
   await fs.mkdir(dir, { recursive: false });
+  const meta = { id: safeId, name: cleanWorkspaceName(name, safeId), createdAt: new Date().toISOString() };
+  await writeWorkspaceMeta(safeId, meta);
   logger.info(`Workspace created: ${dir}`);
-  return { id: safeId, dir };
+  return { id: safeId, dir, ...meta };
 }
 
 export async function resolveWorkspace(id) {
@@ -56,12 +76,13 @@ export async function removeWorkspace(id) {
   const dir = path.resolve(path.join(ROOT, safeId));
   if (!withinRoot(dir) || dir === path.resolve(ROOT)) throw new Error('Refusing to remove root');
   await fs.rm(dir, { recursive: true, force: true });
+  await fs.rm(path.join(META_ROOT, `${safeId}.json`), { force: true }).catch(() => {});
   logger.info(`Workspace removed: ${dir}`);
 }
 
 export async function listWorkspaces() {
   const entries = await fs.readdir(ROOT, { withFileTypes: true }).catch(() => []);
-  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  return entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
 }
 
 export async function workspaceStats(id) {

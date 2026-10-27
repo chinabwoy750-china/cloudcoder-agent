@@ -154,7 +154,13 @@
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 </button>
                 <input id="attach-input" type="file" multiple hidden />
-                <div class="select-wrap">
+                <div class="select-wrap mode-select-wrap">
+                  <select id="task-mode" aria-label="Task mode" title="Task mode">
+                    <option value="fast">Fast</option>
+                    <option value="thorough">Thorough</option>
+                  </select>
+                </div>
+                <div class="select-wrap model-select-wrap">
                   <select id="model-select" aria-label="Model">
                     <option value="">default model</option>
                   </select>
@@ -222,6 +228,23 @@
             <p class="muted small">Session and account</p>
           </div>
         </header>
+        <div class="settings-group settings-wide">
+          <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">Configure China-GPT or another OpenAI-compatible endpoint here. Secrets are saved server-side, never returned to the browser.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
+          <form id="provider-settings-form" class="settings-form">
+            <label class="field"><span>Base URL</span><input id="provider-base-url" type="url" placeholder="https://your-gateway.example/v1" required /></label>
+            <div class="settings-grid">
+              <label class="field"><span>Provider ID</span><input id="provider-id" placeholder="china-gpt" required maxlength="64" /></label>
+              <label class="field"><span>Display name</span><input id="provider-name" placeholder="China-GPT" maxlength="80" /></label>
+            </div>
+            <label class="field"><span>API key <small class="muted">(leave blank to keep the saved key)</small></span><input id="provider-api-key" type="password" autocomplete="new-password" placeholder="Paste API key only when adding or replacing it" /></label>
+            <div class="settings-grid">
+              <label class="field"><span>Default model ID</span><input id="provider-model" list="provider-model-options" placeholder="Choose a model ID" required /><datalist id="provider-model-options"></datalist></label>
+              <label class="field"><span>Model display name</span><input id="provider-model-name" placeholder="MiniMax M2.7" /></label>
+            </div>
+            <div class="row wrap settings-actions"><button id="refresh-provider-models" class="ghost-btn" type="button">Refresh models</button><button id="save-provider-settings" class="primary-btn" type="submit">Save provider & restart</button></div>
+            <p class="muted small" id="provider-note">Site settings are kept in a private runtime file. Render's filesystem is ephemeral unless you attach a persistent disk, so settings may reset on redeploy.</p>
+          </form>
+        </div>
         <div class="settings-group">
           <h3>Preferred model</h3>
           <p class="muted small">Your selection is remembered on this device. Options come from the configured endpoint.</p>
@@ -239,7 +262,23 @@
           </dl>
         </div>
         <div class="settings-group">
-          <h3>Account</h3>
+          <h3>GitHub integration</h3>
+          <p class="muted small">Optional. Add a personal access token to enable private repository listing, cloning and GitHub operations. The token is never sent back to the browser.</p>
+          <form id="github-settings-form" class="settings-form">
+            <label class="field"><span>GitHub token</span><input id="github-token" type="password" autocomplete="new-password" placeholder="Paste token to add or replace it" /></label>
+            <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span><button class="ghost-btn" type="submit">Save GitHub settings</button></div>
+          </form>
+        </div>
+        <div class="settings-group">
+          <h3>Website login</h3>
+          <p class="muted small">Render environment credentials remain the bootstrap fallback. You can optionally override the username and password here.</p>
+          <form id="account-settings-form" class="settings-form">
+            <label class="field"><span>Username</span><input id="account-username" autocomplete="username" required maxlength="80" /></label>
+            <label class="field"><span>New password <small class="muted">(optional; 12+ characters)</small></span><input id="account-password" type="password" autocomplete="new-password" minlength="12" placeholder="Leave blank to keep the current password" /></label>
+            <label class="checkbox-line"><input id="account-use-env-password" type="checkbox" /> <span>Use the password from Render environment instead</span></label>
+            <button class="ghost-btn" type="submit">Save login settings</button>
+          </form>
+          <div class="settings-divider"></div>
           <p class="muted small">Sign out of this browser.</p>
           <button id="logout-btn" class="danger-btn" type="button">Sign out</button>
         </div>
@@ -288,6 +327,15 @@
   </aside>
 </div>
 
+<div id="workspace-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
+  <form id="workspace-form" class="modal-card">
+    <div class="modal-icon">✦</div>
+    <h2 id="workspace-modal-title">Create a workspace</h2>
+    <p class="muted small">Give this project a name you’ll recognize later.</p>
+    <label class="field"><span>Workspace name</span><input id="workspace-name-input" maxlength="80" placeholder="e.g. My portfolio website" required autofocus /></label>
+    <div class="row modal-actions"><button id="workspace-cancel" class="ghost-btn" type="button">Cancel</button><button class="primary-btn" type="submit">Create workspace</button></div>
+  </form>
+</div>
 <div id="toasts" class="toasts" aria-live="assertive"></div>
 
 <script src="/app.js" type="module"></script>

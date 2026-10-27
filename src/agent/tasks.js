@@ -8,7 +8,7 @@ import { ensureOpenCodeReady } from './opencode.js';
  * Create an OpenCode session rooted at `directory` and stream the agent's work.
  * Emits events via onEvent({type, ...}). Resolves with {sessionId}.
  */
-export async function runAgentTask({ directory, prompt, model, onEvent = () => {}, signal }) {
+export async function runAgentTask({ directory, prompt, model, mode = 'fast', onEvent = () => {}, signal }) {
   // Never hit OpenCode while it is still booting.
   await ensureOpenCodeReady(45000);
   const session = await oc('POST', '/session', {
@@ -20,7 +20,7 @@ export async function runAgentTask({ directory, prompt, model, onEvent = () => {
   onEvent({ type: 'session', sessionId, directory });
 
   // Optional plan-then-act prefix (still a single OpenCode prompt — not a second engine).
-  const planOn = String(process.env.PLAN_THEN_ACT || 'true').toLowerCase() !== 'false';
+  const planOn = mode === 'thorough' || (mode !== 'fast' && String(process.env.PLAN_THEN_ACT || 'false').toLowerCase() === 'true');
   const planPrefix = planOn
     ? (
       'Before making changes, briefly outline a short plan (3–6 bullets), ' +
@@ -33,7 +33,7 @@ export async function runAgentTask({ directory, prompt, model, onEvent = () => {
   const body = { parts: [{ type: 'text', text: finalPrompt }] };
   const m = splitModel(model || config.agent.defaultModel);
   if (m) body.model = m;
-  logger.info(`Agent task model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} planThenAct=${planOn}`);
+  logger.info(`Agent task model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} mode=${mode} planThenAct=${planOn}`);
 
   await oc('POST', `/session/${sessionId}/prompt_async`, {
     query: { directory },
