@@ -1049,3 +1049,271 @@ input:focus, textarea:focus, select:focus {
   .topbar-title-stack #project-title { max-width: 42vw; }
   .action-stream { max-height: 160px; }
 }
+
+/* ===== Lovable-inspired shells ===== */
+.app {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+.shell { position: relative; min-height: 100%; }
+.shell-home {
+  min-height: calc(100dvh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: #07080c;
+  overflow: hidden;
+}
+.home-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(236, 72, 153, 0.35), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 20% 90%, rgba(99, 102, 241, 0.35), transparent 50%),
+    radial-gradient(ellipse 50% 35% at 80% 85%, rgba(56, 189, 248, 0.25), transparent 50%),
+    linear-gradient(180deg, #0a0b10 0%, #07080c 40%, #120818 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+.home-top, .home-center { position: relative; z-index: 1; }
+.home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.home-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.home-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px 48px;
+  gap: 20px;
+}
+.home-greeting {
+  margin: 0;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+  color: #f4f6fb;
+}
+.home-composer {
+  width: min(560px, 100%);
+  background: rgba(22, 24, 32, 0.92);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 22px;
+  padding: 14px 14px 10px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  backdrop-filter: blur(12px);
+}
+.home-composer textarea {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #eef1f8;
+  resize: none;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  min-height: 52px;
+  outline: none;
+}
+.home-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+.home-composer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(135deg, #7c9eff, #a78bfa);
+  color: #0b0d12;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.home-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.home-hint { text-align: center; max-width: 360px; }
+
+/* Projects list */
+.shell-projects {
+  min-height: calc(100dvh - 64px);
+  background: #07080c;
+  padding: 16px 16px 100px;
+}
+.projects-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.projects-top h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+}
+.projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.project-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 10px 10px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+}
+.project-card:hover { background: rgba(255,255,255,0.05); }
+.project-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(124,158,255,0.35), rgba(167,139,250,0.2)),
+    #12141c;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #e8ecff;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+.project-meta { flex: 1; min-width: 0; }
+.project-meta strong {
+  display: block;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-meta span {
+  display: block;
+  font-size: 12px;
+  color: #9aa3b5;
+  margin-top: 2px;
+}
+.project-menu-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.projects-new-btn {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 20px;
+  background: rgba(30, 32, 42, 0.95);
+  color: #f2f4fa;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.projects-new-btn .plus { font-size: 18px; line-height: 1; }
+
+.project-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 220px;
+  max-width: min(300px, 90vw);
+  background: #1a1c24;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+}
+.project-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: #e8ebf5;
+  padding: 11px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.project-menu button:hover { background: rgba(255,255,255,0.06); }
+.project-menu button.danger { color: #fb7185; }
+
+/* Bottom nav */
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(20, 22, 30, 0.92);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  backdrop-filter: blur(14px);
+}
+.bottom-nav-btn {
+  border: 0;
+  background: transparent;
+  color: #9aa3b5;
+  border-radius: 999px;
+  padding: 10px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 72px;
+}
+.bottom-nav-btn.active {
+  background: rgba(255,255,255,0.08);
+  color: #f4f6fb;
+}
+.shell-workspace .main {
+  /* keep existing workbench */
+}
+@media (min-width: 900px) {
+  .bottom-nav { /* still useful on tablet; desktop can keep */
+  }
+  .shell-home .home-center { padding-bottom: 80px; }
+}
+/* Hide legacy sidebar on small screens when using bottom nav home-first UX - keep for desktop */

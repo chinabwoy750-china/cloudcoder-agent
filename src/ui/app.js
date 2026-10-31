@@ -28,6 +28,8 @@ const state = {
   modelMeta: { defaultModel: null, source: null, error: null },
   previewOpen: false,
   modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
+  shell: 'home',
+  menuWorkspaceId: null,
 };
 
 /* ---------------- Utilities ---------------- */
@@ -85,6 +87,215 @@ function toast(message, kind = '') {
 
 /* ---------------- Auth ---------------- */
 
+
+/* ---------------- Shell navigation (Home / Projects / Workspace) ---------------- */
+function setShell(name) {
+  state.shell = name;
+  const home = $('#shell-home');
+  const projects = $('#shell-projects');
+  const workspace = $('#shell-workspace');
+  home?.classList.toggle('hidden', name !== 'home');
+  projects?.classList.toggle('hidden', name !== 'projects');
+  workspace?.classList.toggle('hidden', name !== 'workspace');
+  document.querySelectorAll('.bottom-nav-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.shell === name || (name === 'workspace' && btn.dataset.shell === 'projects'));
+  });
+  // Bottom nav stays visible; when in workspace, highlight projects as context
+  if (name === 'home') {
+    closeDrawers();
+  }
+  if (name === 'projects') {
+    closeDrawers();
+    hideProjectMenu();
+    renderProjectsList();
+  }
+}
+
+document.querySelectorAll('.bottom-nav-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const shell = btn.dataset.shell;
+    if (shell === 'home') setShell('home');
+    if (shell === 'projects') setShell('projects');
+  });
+});
+
+$('#home-settings-btn')?.addEventListener('click', () => {
+  setShell('workspace');
+  // open settings view
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === 'settings'));
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== 'view-settings'));
+  loadSiteSettings?.();
+});
+
+function hideProjectMenu() {
+  $('#project-menu')?.classList.add('hidden');
+  state.menuWorkspaceId = null;
+}
+
+function showProjectMenu(workspaceId, anchorEl) {
+  const menu = $('#project-menu');
+  if (!menu || !anchorEl) return;
+  state.menuWorkspaceId = workspaceId;
+  menu.classList.remove('hidden');
+  const rect = anchorEl.getBoundingClientRect();
+  const top = Math.min(window.innerHeight - 280, rect.bottom + 6);
+  const left = Math.min(window.innerWidth - 240, Math.max(12, rect.right - 220));
+  menu.style.top = `${top}px`;
+  menu.style.left = `${left}px`;
+}
+
+document.addEventListener('click', (e) => {
+  const menu = $('#project-menu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  if (menu.contains(e.target) || e.target.closest?.('.project-menu-btn')) return;
+  hideProjectMenu();
+});
+
+async function renderProjectsList() {
+  const list = $('#projects-list');
+  if (!list) return;
+  list.innerHTML = '<p class="muted small">Loading projects…</p>';
+  try {
+    await refreshWorkspaces();
+    const items = state.workspaces || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="muted" style="padding:12px 4px">No projects yet. Create one from Home or tap New project.</p>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const w of items) {
+      const id = w.id || w;
+      const name = w.name || id;
+      const when = w.createdAt || w.updatedAt || '';
+      const whenLabel = when ? (typeof when === 'number' ? new Date(when).toLocaleDateString() : new Date(when).toLocaleDateString()) : '';
+      const card = document.createElement('div');
+      card.className = 'project-card';
+      card.dataset.id = id;
+      const initial = String(name).trim().charAt(0).toUpperCase() || 'P';
+      card.innerHTML = `
+        <div class="project-thumb">${escapeHtml(initial)}</div>
+        <div class="project-meta">
+          <strong>${escapeHtml(name)}</strong>
+          <span>${escapeHtml(whenLabel || id)}</span>
+        </div>
+        <button type="button" class="project-menu-btn" aria-label="Project menu">···</button>
+      `;
+      card.addEventListener('click', (ev) => {
+        if (ev.target.closest('.project-menu-btn')) return;
+        openProjectWorkspace(id);
+      });
+      card.querySelector('.project-menu-btn')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        showProjectMenu(id, ev.currentTarget);
+      });
+      list.appendChild(card);
+    }
+  } catch (err) {
+    list.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function openProjectWorkspace(id) {
+  hideProjectMenu();
+  setShell('workspace');
+  // ensure chat view
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === 'chat' || !b.dataset.view));
+  const chat = $('#view-chat');
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== 'view-chat' && v.id !== undefined));
+  // show chat view specifically
+  document.querySelectorAll('#shell-workspace .view').forEach((v) => {
+    v.classList.toggle('hidden', v.id !== 'view-chat');
+  });
+  await selectWorkspace(id);
+  updateComposerState();
+}
+
+$('#projects-new-btn')?.addEventListener('click', () => {
+  setShell('home');
+  $('#home-prompt')?.focus();
+});
+$('#projects-refresh')?.addEventListener('click', () => renderProjectsList());
+
+$('#project-menu')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn || !state.menuWorkspaceId) return;
+  const id = state.menuWorkspaceId;
+  const action = btn.dataset.action;
+  hideProjectMenu();
+  try {
+    if (action === 'open' || action === 'chat') {
+      await openProjectWorkspace(id);
+    } else if (action === 'rename') {
+      const current = state.workspaces.find((w) => (w.id || w) === id);
+      const name = prompt('Rename project', current?.name || '');
+      if (!name) return;
+      await api(`/api/workspaces/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+      toast('Renamed', 'ok');
+      await renderProjectsList();
+    } else if (action === 'export') {
+      window.open(`/api/workspaces/${encodeURIComponent(id)}/zip`, '_blank');
+    } else if (action === 'snapshot') {
+      await api(`/api/workspaces/${encodeURIComponent(id)}/snapshots`, { method: 'POST', body: JSON.stringify({ label: 'manual' }) });
+      toast('Snapshot created', 'ok');
+    } else if (action === 'delete') {
+      if (!confirm('Delete this project? This cannot be undone.')) return;
+      await api(`/api/workspaces/${encodeURIComponent(id)}?confirm=true`, { method: 'DELETE' });
+      toast('Deleted', 'ok');
+      if (state.workspaceId === id) state.workspaceId = null;
+      await renderProjectsList();
+    }
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+});
+
+async function createProjectAndRun(prompt, mode = 'build') {
+  const name = String(prompt).trim().slice(0, 48) || 'Untitled project';
+  const res = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name }) });
+  const id = res.workspaceId || res.id;
+  if (!id) throw new Error('Could not create project');
+  await refreshWorkspaces();
+  setShell('workspace');
+  document.querySelectorAll('#shell-workspace .view').forEach((v) => {
+    v.classList.toggle('hidden', v.id !== 'view-chat');
+  });
+  await selectWorkspace(id);
+  // seed prompt into main composer and send
+  const ta = $('#prompt');
+  if (ta) ta.value = prompt;
+  const modeSel = $('#task-mode');
+  if (modeSel) modeSel.value = mode === 'plan' ? 'plan' : 'build';
+  updateComposerState();
+  // trigger existing send path
+  $('#composer')?.requestSubmit();
+}
+
+$('#home-composer')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const prompt = ($('#home-prompt')?.value || '').trim();
+  if (!prompt) return;
+  if (!state.openCodeReady) return toast('Coding engine is still starting…', 'err');
+  const btn = $('#home-send-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const mode = $('#home-task-mode')?.value || 'build';
+    await createProjectAndRun(prompt, mode);
+    if ($('#home-prompt')) $('#home-prompt').value = '';
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+$('#home-prompt')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    $('#home-composer')?.requestSubmit();
+  }
+});
+
+
 function showLogin() {
   $('#login').classList.remove('hidden');
   $('#app').classList.add('hidden');
@@ -92,6 +303,7 @@ function showLogin() {
 function showApp() {
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  setShell(state.workspaceId ? 'workspace' : 'home');
 }
 
 async function checkSession() {
@@ -373,6 +585,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 });
 
 async function selectWorkspace(id) {
+  setShell('workspace');
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);
