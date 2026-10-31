@@ -3,13 +3,14 @@ import { config } from '../config/env.js';
 import { postgresHealth } from '../storage/postgres.js';
 import { objectStorageHealth } from '../storage/objects.js';
 import { isolationMode } from '../worker/runner.js';
+import { getMetricsSnapshot } from './metrics.js';
 
 export async function healthHandler(req, res) {
   const db = await postgresHealth();
   const objects = await objectStorageHealth();
-  const ok = isOpenCodeReady() && (!db.configured || db.ready) && objects.ready;
-  res.status(ok ? 200 : 503).json({
-    status: ok ? 'healthy' : 'starting',
+  const ready = isOpenCodeReady() && (!db.configured || db.ready) && objects.ready;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'healthy' : 'starting',
     service: 'cloudcoder-agent',
     version: '1.0.0',
     opencode: isOpenCodeReady() ? 'ready' : 'not-ready',
@@ -26,4 +27,20 @@ export async function healthHandler(req, res) {
     },
     timestamp: new Date().toISOString(),
   });
+}
+
+export async function readinessHandler(req, res) {
+  const db = await postgresHealth();
+  const objects = await objectStorageHealth();
+  const checks = {
+    opencode: isOpenCodeReady(),
+    database: !db.configured || db.ready,
+    objects: objects.ready,
+  };
+  const ready = Object.values(checks).every(Boolean);
+  res.status(ready ? 200 : 503).json({ ready, checks, isolation: isolationMode() });
+}
+
+export function metricsHandler(req, res) {
+  res.json(getMetricsSnapshot());
 }

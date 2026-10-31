@@ -44,8 +44,16 @@ services:
         value: /tmp/cloudcoder
       - key: LOG_LEVEL
         value: info
+      - key: DATABASE_URL
+        sync: false
+      - key: OBJECT_STORAGE_PATH
+        value: /tmp/cloudcoder.objects
+      - key: ALLOW_PUBLIC_REGISTRATION
+        value: "false"
+      - key: DOCKER_ISOLATION
+        value: "false"
 
-  # Optional isolated worker (same image). Uncomment when you have a paid instance or shared disk.
+  # Optional isolated worker (same image). Enable with shared secret + WORKER_URL on web service.
   # - type: web
   #   name: universal-modder-worker
   #   runtime: docker
@@ -60,3 +68,5 @@ services:
   #       generateValue: true
   #     - key: WORKSPACE_ROOT
   #       value: /tmp/cloudcoder
+
+# Attach a Render PostgreSQL instance and set DATABASE_URL on the web service for multi-user mode.

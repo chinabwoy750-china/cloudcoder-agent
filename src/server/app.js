@@ -15,6 +15,9 @@ import { buildRepairRouter } from './routes/build-repair.js';
 import { chinaGptRouter } from './routes/china-gpt.js';
 import { mediaRouter } from './routes/media.js';
 import { integrationsRouter } from './routes/integrations.js';
+import { deployRouter } from './routes/deploy.js';
+import { readinessHandler, metricsHandler } from './health.js';
+import { requireAdmin } from '../auth/session.js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { rateLimitMiddleware } from '../utils/ratelimit.js';
@@ -36,6 +39,7 @@ export function createApp() {
 
   // Public health check
   app.get('/health', healthHandler);
+  app.get('/ready', readinessHandler);
 
   // Global rate limit on the authenticated surface
   app.use(rateLimitMiddleware({ windowMs: 60000, max: 600 }));
@@ -71,6 +75,8 @@ export function createApp() {
   app.use('/api/models', modelsRouter());
   app.use('/api/media', mediaRouter());
   app.use('/api/integrations', integrationsRouter());
+  app.use('/api/deploy', deployRouter());
+  app.get('/api/metrics', requireAdmin, metricsHandler);
   app.use('/api/china-gpt', chinaGptRouter);
   app.use('/api/settings', settingsRouter());
   app.use('/api/workspaces', buildRepairRouter());
