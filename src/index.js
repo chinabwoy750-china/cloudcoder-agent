@@ -7,6 +7,7 @@ import { fetchCustomModels } from './config/custom-models.js';
 import { loadRuntimeSettings } from './config/runtime-settings.js';
 import { initializePostgres, closePostgres } from './storage/postgres.js';
 import { bootstrapAdminFromEnv } from './db/users.js';
+import { markStaleJobsFailed } from './jobs/store.js';
 
 async function main() {
   logger.info(`CloudCoder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
@@ -28,6 +29,11 @@ async function main() {
     await bootstrapAdminFromEnv();
   } catch (err) {
     logger.warn(`[auth] Admin bootstrap failed: ${err.message}`);
+  }
+  try {
+    await markStaleJobsFailed();
+  } catch (err) {
+    logger.warn(`[jobs] Stale job recovery failed: ${err.message}`);
   }
   // Load site-managed provider/model settings before model discovery and OpenCode startup.
   await loadRuntimeSettings();

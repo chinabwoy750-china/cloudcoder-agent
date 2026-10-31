@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createJob, getJob, emit, finish, cancel, subscribe, listJobs } from '../../jobs/registry.js';
+import { createJob, getJob, getJobWithFallback, emit, finish, cancel, subscribe, listJobs, listJobsForOwner } from '../../jobs/registry.js';
 import { runAgentTask } from '../../agent/tasks.js';
 import { resolveWorkspace } from '../../workspace/manager.js';
 import { config } from '../../config/env.js';
@@ -10,7 +10,15 @@ import { resolveUserModelSelection, resolveDefaultModelRef } from '../../config/
 export function agentRouter() {
   const router = Router();
 
-  router.get('/tasks', (req, res) => res.json(listJobs()));
+  router.get('/tasks', async (req, res, next) => {
+    try {
+      if (req.authUserId) {
+        const jobs = await listJobsForOwner(req.authUserId, { limit: 50 });
+        return res.json(jobs);
+      }
+      res.json(listJobs());
+    } catch (err) { next(err); }
+  });
 
   router.post(
     '/tasks',
@@ -35,7 +43,7 @@ export function agentRouter() {
             resolveDefaultModelRef() ||
             config.agent.defaultModel ||
             undefined;
-          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode } });
+          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode, ownerUserId: req.authUserId || null } });
           res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null, mode });
 
           runAgentTask({
@@ -58,15 +66,21 @@ export function agentRouter() {
     }
   );
 
-  router.get('/tasks/:id', (req, res) => {
-    const job = getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: 'Job not found' });
-    res.json({
-      id: job.id, type: job.type, status: job.status,
-      createdAt: job.createdAt, updatedAt: job.updatedAt,
-      result: job.result, error: job.error,
-      events: job.events.slice(-500),
-    });
+  router.get('/tasks/:id', async (req, res, next) => {
+    try {
+      const job = await getJobWithFallback(req.params.id);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
+      if (req.authUserId && job.meta?.ownerUserId && job.meta.ownerUserId !== req.authUserId && req.authRole !== 'admin') {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      res.json({
+        id: job.id, type: job.type, status: job.status,
+        createdAt: job.createdAt, updatedAt: job.updatedAt,
+        result: job.result, error: job.error,
+        events: (job.events || []).slice(-500),
+        durableOnly: Boolean(job.durableOnly),
+      });
+    } catch (err) { next(err); }
   });
 
   router.post('/tasks/:id/cancel', (req, res) => {

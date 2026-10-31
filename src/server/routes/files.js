@@ -7,6 +7,7 @@ import { config } from '../../config/env.js';
 import * as ws from '../../workspace/manager.js';
 import * as files from '../../workspace/files.js';
 import { createZip, extractZip } from '../../workspace/zip.js';
+import { exportWorkspaceArchive } from '../../workspace/archive.js';
 import { runProjectAction, allowedActions } from '../../workspace/run.js';
 import { detectProjectType } from '../../git/detect.js';
 import { rateLimitMiddleware } from '../../utils/ratelimit.js';
@@ -157,6 +158,19 @@ export function filesRouter() {
       }
     })
   );
+
+  
+  router.post('/workspaces/:id/archive', rateLimitMiddleware({ windowMs: 60000, max: 5 }), asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
+    const archive = await exportWorkspaceArchive(req.params.id);
+    res.json({
+      ok: true,
+      filename: archive.filename,
+      bytes: archive.bytes,
+      storageKey: archive.storageKey,
+      storageMode: archive.storageMode,
+    });
+  }));
 
   router.get('/workspaces/:id/zip', asyncH(async (req, res) => {
     await requireWorkspaceAccess(req);
