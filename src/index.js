@@ -5,6 +5,7 @@ import { createApp } from './server/app.js';
 import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 import { fetchCustomModels } from './config/custom-models.js';
 import { loadRuntimeSettings } from './config/runtime-settings.js';
+import { initializePostgres, closePostgres } from './storage/postgres.js';
 
 async function main() {
   logger.info(`CloudCoder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
@@ -20,6 +21,8 @@ async function main() {
   }
 
   validateEnv();
+  // Initialize the relational data layer before accepting authenticated traffic.
+  await initializePostgres();
   // Load site-managed provider/model settings before model discovery and OpenCode startup.
   await loadRuntimeSettings();
   validateGitHubEnv();
@@ -55,6 +58,7 @@ async function main() {
     logger.info(`Received ${sig}, shutting down...`);
     stopTelegramBot();
     stopOpenCode();
+    closePostgres().catch((err) => logger.warn(`[database] Shutdown error: ${err.message}`));
     server.close(() => { logger.info('HTTP closed.'); process.exit(0); });
     setTimeout(() => process.exit(1), 10000);
   };

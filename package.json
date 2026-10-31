@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "AI web-app modification studio powered by OpenCode, GitHub and ZIP imports",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
@@ -16,6 +18,7 @@
     "multer": "^2.0.2",
     "octokit": "^4.1.2",
     "simple-git": "^3.27.0",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "pg": "^8.16.3"
   }
 }
