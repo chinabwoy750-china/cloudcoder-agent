@@ -6,6 +6,7 @@ import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 import { fetchCustomModels } from './config/custom-models.js';
 import { loadRuntimeSettings } from './config/runtime-settings.js';
 import { initializePostgres, closePostgres } from './storage/postgres.js';
+import { bootstrapAdminFromEnv } from './db/users.js';
 
 async function main() {
   logger.info(`CloudCoder Agent starting (NODE_ENV=${process.env.NODE_ENV || 'development'})`);
@@ -23,6 +24,11 @@ async function main() {
   validateEnv();
   // Initialize the relational data layer before accepting authenticated traffic.
   await initializePostgres();
+  try {
+    await bootstrapAdminFromEnv();
+  } catch (err) {
+    logger.warn(`[auth] Admin bootstrap failed: ${err.message}`);
+  }
   // Load site-managed provider/model settings before model discovery and OpenCode startup.
   await loadRuntimeSettings();
   validateGitHubEnv();

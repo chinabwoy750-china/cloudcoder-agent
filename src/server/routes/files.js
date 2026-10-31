@@ -12,6 +12,7 @@ import { detectProjectType } from '../../git/detect.js';
 import { rateLimitMiddleware } from '../../utils/ratelimit.js';
 import { logger } from '../../utils/logger.js';
 import { createWorkspaceSnapshot, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from '../../workspace/snapshots.js';
+import { assertWorkspaceOwner } from '../../db/workspaces.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -28,15 +29,28 @@ function asyncH(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+
+async function requireWorkspaceAccess(req) {
+  await assertWorkspaceOwner(req.params.id, req.authUserId || null, {
+    allowAdmin: true,
+    userRole: req.authRole || 'user',
+  });
+}
+
 export function filesRouter() {
   const router = Router();
 
   router.get('/workspaces', asyncH(async (req, res) => {
-    const ids = await ws.listWorkspaces();
-    const stats = await Promise.all(ids.map(async (id) => {
+    const listed = await ws.listWorkspaces(req.user || { id: req.authUserId, role: req.authRole });
+    // listed may be string ids (legacy) or objects
+    const items = Array.isArray(listed) ? listed : [];
+    const stats = await Promise.all(items.map(async (entry) => {
+      const id = typeof entry === 'string' ? entry : entry.id;
       const base = await ws.workspaceStats(id).catch(() => ({ id, files: 0, bytes: 0 }));
       const meta = await ws.getWorkspaceMeta(id);
-      return { ...base, name: meta.name || id, createdAt: meta.createdAt || null };
+      const name = (typeof entry === 'object' && entry.name) || meta.name || id;
+      const createdAt = (typeof entry === 'object' && (entry.createdAt || entry.created_at)) || meta.createdAt || null;
+      return { ...base, name, createdAt, legacy: Boolean(entry && entry.legacy) };
     }));
     res.json(stats);
   }));
@@ -44,11 +58,20 @@ export function filesRouter() {
   router.post('/workspaces', rateLimitMiddleware({ windowMs: 60000, max: 20 }), asyncH(async (req, res) => {
     const name = req.body?.name;
     if (name !== undefined && (typeof name !== 'string' || name.trim().length > 80)) return res.status(400).json({ error: 'Workspace name must be 1–80 characters' });
-    const { id, dir, name: workspaceName } = await ws.createWorkspace(undefined, name || 'Untitled workspace');
+    const { id, dir, name: workspaceName } = await ws.createWorkspace(undefined, name || 'Untitled workspace', { ownerUserId: req.authUserId || null });
     res.status(201).json({ workspaceId: id, name: workspaceName, dir });
   }));
 
+  router.patch('/workspaces/:id', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
+    const name = req.body?.name;
+    if (!name || typeof name !== 'string' || name.trim().length > 80) return res.status(400).json({ error: 'Workspace name must be 1–80 characters' });
+    const result = await ws.renameWorkspace(req.params.id, name, req.user || { id: req.authUserId, role: req.authRole });
+    res.json(result);
+  }));
+
   router.get('/workspaces/:id', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const stats = await ws.workspaceStats(req.params.id);
     const project = await detectProjectType(stats.dir);
     const meta = await ws.getWorkspaceMeta(req.params.id);
@@ -59,16 +82,19 @@ export function filesRouter() {
     if (req.query.confirm !== 'true') {
       return res.status(400).json({ error: 'Deletion requires ?confirm=true' });
     }
-    await ws.removeWorkspace(req.params.id);
+    await requireWorkspaceAccess(req);
+    await ws.removeWorkspace(req.params.id, req.user || { id: req.authUserId, role: req.authRole });
     res.json({ removed: true });
   }));
 
   router.get('/workspaces/:id/files', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const list = await files.listFiles(req.params.id, { subdir: req.query.subdir || '.', max: 2000 });
     res.json(list);
   }));
 
   router.get('/workspaces/:id/file', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const rel = req.query.path;
     if (!rel) return res.status(400).json({ error: 'path query param required' });
     const file = await files.readFile(req.params.id, rel);
@@ -76,6 +102,7 @@ export function filesRouter() {
   }));
 
   router.put('/workspaces/:id/file', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const { path: rel, content } = req.body || {};
     if (!rel || typeof content !== 'string') return res.status(400).json({ error: 'path and content required' });
     if (Buffer.byteLength(content) > config.limits.maxUploadBytes) {
@@ -85,6 +112,7 @@ export function filesRouter() {
   }));
 
   router.delete('/workspaces/:id/file', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const rel = req.query.path;
     const confirmed = req.query.confirm === 'true';
     res.json(await files.deleteFile(req.params.id, rel, { confirmed }));
@@ -96,6 +124,7 @@ export function filesRouter() {
     rateLimitMiddleware({ windowMs: 60000, max: 20 }),
     upload.array('files', 20),
     asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
       const saved = [];
       for (const f of req.files || []) {
         saved.push(await files.saveUpload(req.params.id, f.originalname, f.buffer));
@@ -110,6 +139,8 @@ export function filesRouter() {
     rateLimitMiddleware({ windowMs: 60000, max: 10 }),
     upload.single('archive'),
     asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
+    await requireWorkspaceAccess(req);
       if (!req.file) return res.status(400).json({ error: 'archive field required' });
       const dir = await ws.resolveWorkspace(req.params.id);
       const tmpPath = `${dir}/.cloudcoder-upload-${Date.now()}.zip`;
@@ -128,6 +159,7 @@ export function filesRouter() {
   );
 
   router.get('/workspaces/:id/zip', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const zip = await createZip(req.params.id, { subdir: req.query.subdir || '.' });
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${zip.name}"`);
@@ -141,14 +173,17 @@ export function filesRouter() {
 
   // Workspace snapshots provide an explicit recovery point before risky AI edits.
   router.get('/workspaces/:id/snapshots', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     res.json({ snapshots: await listWorkspaceSnapshots(req.params.id) });
   }));
   router.post('/workspaces/:id/snapshots', rateLimitMiddleware({ windowMs: 60000, max: 10 }), asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const label = typeof req.body?.label === 'string' ? req.body.label : '';
     const snapshot = await createWorkspaceSnapshot(req.params.id, label);
     res.status(201).json({ ok: true, snapshot });
   }));
   router.post('/workspaces/:id/snapshots/:snapshotId/restore', rateLimitMiddleware({ windowMs: 60000, max: 3 }), asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     if (req.body?.confirm !== true) return res.status(400).json({ error: 'Restore is destructive; send confirm=true after reviewing the snapshot.' });
     const result = await restoreWorkspaceSnapshot(req.params.id, req.params.snapshotId);
     res.json({ ok: true, ...result, message: 'Snapshot restored. Rebuild the project to refresh generated output.' });
@@ -156,6 +191,7 @@ export function filesRouter() {
 
   // Serve saved visual overrides from the workspace root, independent of build output directory.
   router.get('/workspaces/:id/visual-overrides.css', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const dir = await ws.resolveWorkspace(req.params.id);
     const cssPath = path.join(dir, '.universal-modder-visual.css');
     const css = await fs.readFile(cssPath, 'utf8').catch(() => '');
@@ -165,6 +201,7 @@ export function filesRouter() {
   // Serve the project's real built/static output inside the authenticated preview iframe.
   // Prefer framework build directories; fall back to a root index.html for static projects.
   router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const dir = await ws.resolveWorkspace(req.params.id);
     const candidates = [path.join(dir, 'dist'), path.join(dir, 'build'), path.join(dir, 'out'), dir];
     let root = dir;
@@ -204,6 +241,7 @@ export function filesRouter() {
 
   // Run a named project action (test / build / install).
   router.post('/workspaces/:id/actions/:action', rateLimitMiddleware({ windowMs: 60000, max: 20 }), asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
     const action = req.params.action;
     if (!['test', 'build', 'install'].includes(action)) {
       return res.status(400).json({ error: 'action must be test, build, or install' });

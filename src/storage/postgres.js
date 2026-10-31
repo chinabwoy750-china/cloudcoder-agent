@@ -1,9 +1,18 @@
-import pg from 'pg';
+import { createRequire } from 'node:module';
 import { logger } from '../utils/logger.js';
 
-const { Pool } = pg;
+const require = createRequire(import.meta.url);
 let pool = null;
 let initialized = false;
+let Pool = null;
+
+function loadPoolClass() {
+  if (!Pool) {
+    const pg = require('pg');
+    Pool = pg.Pool;
+  }
+  return Pool;
+}
 
 const schema = `
 CREATE TABLE IF NOT EXISTS app_users (
@@ -66,7 +75,8 @@ export function isPostgresConfigured() {
 export function getPostgresPool() {
   if (!isPostgresConfigured()) return null;
   if (!pool) {
-    pool = new Pool({
+    const PoolClass = loadPoolClass();
+    pool = new PoolClass({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.PGSSLMODE === 'disable' ? false : { rejectUnauthorized: false },
       max: Number.parseInt(process.env.PGPOOL_MAX || '5', 10),
