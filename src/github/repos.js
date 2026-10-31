@@ -45,3 +45,13 @@ export async function getAuthenticatedUser() {
     return { login: data.login, id: data.id };
   });
 }
+
+
+export async function listBranches(owner, repo, { perPage = 50 } = {}) {
+  const octokit = getOctokit();
+  if (!octokit) throw Object.assign(new Error('GitHub not configured'), { code: 'GITHUB_DISABLED' });
+  return withRetry(async () => {
+    const { data } = await octokit.rest.repos.listBranches({ owner, repo, per_page: Math.min(perPage, 100) });
+    return data.map((b) => ({ name: b.name, protected: b.protected, sha: b.commit?.sha }));
+  });
+}

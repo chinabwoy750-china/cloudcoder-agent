@@ -13,6 +13,8 @@ import { modelsRouter } from './routes/models.js';
 import { settingsRouter } from './routes/settings.js';
 import { buildRepairRouter } from './routes/build-repair.js';
 import { chinaGptRouter } from './routes/china-gpt.js';
+import { mediaRouter } from './routes/media.js';
+import { integrationsRouter } from './routes/integrations.js';
 import { config } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 import { rateLimitMiddleware } from '../utils/ratelimit.js';
@@ -67,7 +69,9 @@ export function createApp() {
 
   app.use('/api/agent', agentRouter());
   app.use('/api/models', modelsRouter());
-  app.use('/api/media', chinaGptRouter);
+  app.use('/api/media', mediaRouter());
+  app.use('/api/integrations', integrationsRouter());
+  app.use('/api/china-gpt', chinaGptRouter);
   app.use('/api/settings', settingsRouter());
   app.use('/api/workspaces', buildRepairRouter());
   app.use('/api/github', githubRouter());

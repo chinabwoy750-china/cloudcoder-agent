@@ -31,6 +31,10 @@ export function githubRouter() {
     try { res.json(await repos.listRepositories({ perPage: 50 })); } catch (e) { next(e); }
   });
 
+  router.get('/repos/:owner/:repo/branches', async (req, res, next) => {
+    try { res.json(await repos.listBranches(req.params.owner, req.params.repo)); } catch (e) { next(e); }
+  });
+
   router.get('/repos/:owner/:repo', async (req, res, next) => {
     try { res.json(await repos.getRepository(req.params.owner, req.params.repo)); } catch (e) { next(e); }
   });
