@@ -6,6 +6,7 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
+      # Auth only — Provider, GitHub, Telegram are configured in Admin dashboard
       - key: NODE_ENV
         value: production
       - key: CLOUDCODER_USERNAME
@@ -18,55 +19,23 @@ services:
         value: opencode
       - key: OPENCODE_SERVER_PASSWORD
         generateValue: true
-      - key: DEFAULT_MODEL
-        value: china-gpt/dahl/MiniMaxAI/MiniMax-M2.7
-      - key: CUSTOM_AI_BASE_URL
-        value: https://gpt-china.onrender.com/v1
-      - key: CUSTOM_AI_API_KEY
-        sync: false
-      - key: CUSTOM_AI_PROVIDER
-        value: china-gpt
-      - key: CUSTOM_AI_MODEL
-        value: dahl/MiniMaxAI/MiniMax-M2.7
-      - key: CUSTOM_AI_MODEL_NAME
-        value: MiniMax M2.7
-      - key: CUSTOM_AI_PROVIDER_NAME
-        value: China-GPT
-      - key: GITHUB_TOKEN
-        sync: false
-      - key: GITHUB_ALLOW_DEFAULT_BRANCH
-        value: "false"
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_ALLOWED_USER_IDS
-        sync: false
       - key: WORKSPACE_ROOT
         value: /tmp/cloudcoder
-      - key: LOG_LEVEL
-        value: info
-      - key: DATABASE_URL
-        sync: false
       - key: OBJECT_STORAGE_PATH
         value: /tmp/cloudcoder.objects
+      - key: LOG_LEVEL
+        value: info
       - key: ALLOW_PUBLIC_REGISTRATION
         value: "false"
       - key: DOCKER_ISOLATION
         value: "false"
+      - key: DATABASE_URL
+        sync: false
+      # Optional durable settings store (recommended on free Render disk)
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
 
-  # Optional isolated worker (same image). Enable with shared secret + WORKER_URL on web service.
-  # - type: web
-  #   name: universal-modder-worker
-  #   runtime: docker
-  #   plan: free
-  #   dockerfilePath: ./Dockerfile
-  #   dockerCommand: node src/worker/service.js
-  #   healthCheckPath: /health
-  #   envVars:
-  #     - key: NODE_ENV
-  #       value: production
-  #     - key: WORKER_SHARED_SECRET
-  #       generateValue: true
-  #     - key: WORKSPACE_ROOT
-  #       value: /tmp/cloudcoder
-
-# Attach a Render PostgreSQL instance and set DATABASE_URL on the web service for multi-user mode.
+# Provider (CUSTOM_AI_*), GitHub, and Telegram secrets are managed in the
+# in-app Admin panel after login. Env vars remain optional fallbacks only.

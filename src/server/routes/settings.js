@@ -12,21 +12,30 @@ export function settingsRouter() {
 
   router.get('/', async (_req, res) => {
     const cache = getCachedModels();
+    const rt = getRuntimeSettings();
     res.json({
       provider: {
-        baseURL: process.env.CUSTOM_AI_BASE_URL || '',
+        baseURL: process.env.CUSTOM_AI_BASE_URL || rt.baseURL || '',
         providerId: getProviderId(),
-        providerName: process.env.CUSTOM_AI_PROVIDER_NAME || 'China-GPT',
-        model: process.env.CUSTOM_AI_MODEL || '',
-        modelName: process.env.CUSTOM_AI_MODEL_NAME || '',
+        providerName: process.env.CUSTOM_AI_PROVIDER_NAME || rt.providerName || 'China-GPT',
+        model: process.env.CUSTOM_AI_MODEL || rt.model || '',
+        modelName: process.env.CUSTOM_AI_MODEL_NAME || rt.modelName || '',
         defaultModel: resolveDefaultModelRef() || '',
-        hasApiKey: Boolean(process.env.CUSTOM_AI_API_KEY),
+        hasApiKey: Boolean(process.env.CUSTOM_AI_API_KEY || rt.apiKey),
         models: (cache.models || []).map((m) => ({ id: m.id, name: m.name, openCodeRef: m.openCodeRef })),
         discovery: cache.source || 'none',
         error: cache.error || null,
+        source: 'admin-dashboard',
       },
-      account: { username: config.auth.username || '', passwordOverride: Boolean(getRuntimeSettings().passwordHash || getRuntimeSettings().password) },
-      integrations: { hasGithubToken: Boolean(config.github.token) },
+      account: {
+        username: config.auth.username || '',
+        passwordOverride: Boolean(rt.passwordHash || rt.password),
+      },
+      integrations: {
+        hasGithubToken: Boolean(config.github.token || rt.githubToken),
+        hasTelegramToken: Boolean(config.telegram?.token || rt.telegramToken),
+        telegramAllowedUserIds: process.env.TELEGRAM_ALLOWED_USER_IDS || rt.telegramAllowedUserIds || '',
+      },
       openCodeReady: isOpenCodeReady(),
       persistence: getSettingsPersistence(),
     });
@@ -74,17 +83,39 @@ export function settingsRouter() {
   });
 
   router.post('/integrations', async (req, res) => {
-    const token = typeof req.body?.githubToken === 'string' ? req.body.githubToken.trim() : '';
-    const clear = req.body?.clearGithubToken === true;
+    const body = req.body || {};
     const update = {};
-    if (token) update.githubToken = token;
-    if (clear) update.githubToken = '';
+    const githubToken = typeof body.githubToken === 'string' ? body.githubToken.trim() : '';
+    if (githubToken) update.githubToken = githubToken;
+    if (body.clearGithubToken === true) update.githubToken = '';
+
+    const telegramToken = typeof body.telegramToken === 'string' ? body.telegramToken.trim() : '';
+    if (telegramToken) update.telegramToken = telegramToken;
+    if (body.clearTelegramToken === true) update.telegramToken = '';
+
+    if (body.telegramAllowedUserIds !== undefined) {
+      update.telegramAllowedUserIds = String(body.telegramAllowedUserIds || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(',');
+    }
+
     if (Object.keys(update).length) {
       await saveRuntimeSettings(update);
-      const { resetOctokit } = await import('../../github/client.js');
-      resetOctokit();
+      try {
+        const { resetOctokit } = await import('../../github/client.js');
+        resetOctokit();
+      } catch {}
     }
-    res.json({ ok: true, message: 'Integration settings saved.', hasGithubToken: Boolean(config.github.token) });
+    res.json({
+      ok: true,
+      message: 'Integrations saved in the admin dashboard (encrypted at rest when persistence is available).',
+      hasGithubToken: Boolean(process.env.GITHUB_TOKEN),
+      hasTelegramToken: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+      telegramAllowedUserIds: process.env.TELEGRAM_ALLOWED_USER_IDS || '',
+      persistence: getSettingsPersistence(),
+    });
   });
 
   router.post('/account', async (req, res) => {

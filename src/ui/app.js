@@ -1366,6 +1366,16 @@ async function loadSiteSettings() {
     if (ghStatus) { ghStatus.textContent = data.integrations?.hasGithubToken ? 'Token configured' : 'Not configured'; ghStatus.classList.toggle('ready', Boolean(data.integrations?.hasGithubToken)); }
     $('#github-token').value = '';
     $('#github-token').placeholder = data.integrations?.hasGithubToken ? 'Token saved — leave blank to keep it' : 'Paste a GitHub personal access token';
+    const tgStatus = $('#telegram-status');
+    if (tgStatus) {
+      tgStatus.textContent = data.integrations?.hasTelegramToken ? 'Bot token configured' : 'Not configured';
+      tgStatus.classList.toggle('ready', Boolean(data.integrations?.hasTelegramToken));
+    }
+    if ($('#telegram-allowed-ids')) $('#telegram-allowed-ids').value = data.integrations?.telegramAllowedUserIds || '';
+    if ($('#telegram-token')) {
+      $('#telegram-token').value = '';
+      $('#telegram-token').placeholder = data.integrations?.hasTelegramToken ? 'Token saved — leave blank to keep it' : 'Paste Telegram bot token';
+    }
     const status = $('#provider-status');
     if (status) { status.textContent = p.hasApiKey ? `${p.models?.length || 0} models · key set` : 'API key not set'; status.classList.toggle('ready', Boolean(p.hasApiKey)); }
     const dl = $('#provider-model-options');
@@ -1572,5 +1582,30 @@ $('#btn-snapshot')?.addEventListener('click', async () => {
     await refreshSnapshots();
   } catch (err) {
     toast(err.message, 'err');
+  }
+});
+
+
+$('#telegram-settings-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('#telegram-settings-form button[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    const result = await api('/api/settings/integrations', {
+      method: 'POST',
+      body: JSON.stringify({
+        telegramToken: $('#telegram-token')?.value || '',
+        clearTelegramToken: Boolean($('#telegram-clear-token')?.checked),
+        telegramAllowedUserIds: $('#telegram-allowed-ids')?.value || '',
+      }),
+    });
+    if ($('#telegram-token')) $('#telegram-token').value = '';
+    if ($('#telegram-clear-token')) $('#telegram-clear-token').checked = false;
+    toast(result.message || 'Telegram settings saved', 'ok');
+    await loadSiteSettings();
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 });

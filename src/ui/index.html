@@ -361,12 +361,13 @@
           <button type="button" class="settings-tab active" data-settings-tab="provider" role="tab" aria-selected="true">Provider</button>
           <button type="button" class="settings-tab" data-settings-tab="routing" role="tab" aria-selected="false">Routing</button>
           <button type="button" class="settings-tab" data-settings-tab="github" role="tab" aria-selected="false">GitHub</button>
+          <button type="button" class="settings-tab" data-settings-tab="telegram" role="tab" aria-selected="false">Telegram</button>
           <button type="button" class="settings-tab" data-settings-tab="account" role="tab" aria-selected="false">Account</button>
         </div>
         <div class="settings-panes">
           <div class="settings-pane active" data-settings-pane="provider">
             <div class="settings-group settings-wide">
-              <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">China-GPT or another OpenAI-compatible endpoint. Secrets stay server-side.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
+              <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">Configure your OpenAI-compatible endpoint here (China-GPT, etc.). Prefer this dashboard over Render env vars.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
               <form id="provider-settings-form" class="settings-form">
             <label class="field"><span>Base URL</span><input id="provider-base-url" type="url" placeholder="https://your-gateway.example/v1" required /></label>
             <div class="settings-grid">
@@ -416,7 +417,7 @@
           <div class="settings-pane" data-settings-pane="github">
             <div class="settings-group settings-wide">
               <h3>GitHub integration</h3>
-              <p class="muted small">Token enables private repos, clone and PRs. Never sent back to the browser.</p>
+              <p class="muted small">Add a GitHub PAT here for clone/PRs. Prefer this dashboard over GITHUB_TOKEN on Render.</p>
               <form id="github-settings-form" class="settings-form">
             <label class="field"><span>GitHub token</span><input id="github-token" type="password" autocomplete="new-password" placeholder="Paste token to add or replace it" /></label>
             <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span><button class="ghost-btn" type="submit">Save GitHub settings</button></div>
@@ -424,6 +425,23 @@
               <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span></div>
             </div>
           </div>
+          
+          <div class="settings-pane" data-settings-pane="telegram">
+            <div class="settings-group settings-wide">
+              <h3>Telegram bot</h3>
+              <p class="muted small">Optional. Token and allowed user IDs are stored with site settings (encrypted). Leave blank on Render env.</p>
+              <form id="telegram-settings-form" class="settings-form">
+                <label class="field"><span>Bot token</span><input id="telegram-token" type="password" autocomplete="new-password" placeholder="123456:ABC… leave blank to keep saved token" /></label>
+                <label class="field"><span>Allowed user IDs</span><input id="telegram-allowed-ids" placeholder="Comma-separated numeric IDs, e.g. 123456789" /></label>
+                <label class="checkbox-line"><input id="telegram-clear-token" type="checkbox" /> <span>Clear saved bot token</span></label>
+                <div class="row wrap settings-actions">
+                  <button class="primary-btn" type="submit">Save Telegram settings</button>
+                  <span id="telegram-status" class="status-chip">Checking…</span>
+                </div>
+              </form>
+            </div>
+          </div>
+
           <div class="settings-pane" data-settings-pane="account">
             <div class="settings-group settings-wide">
               <h3>Website login</h3>

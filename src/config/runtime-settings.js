@@ -35,37 +35,56 @@ function decryptSecret(value) {
 }
 function serializableSettings(values) {
   const output = { ...values };
-  for (const key of ['apiKey', 'githubToken']) {
-    if (typeof output[key] === 'string') output[key] = encryptSecret(output[key]);
+  for (const key of ['apiKey', 'githubToken', 'telegramToken']) {
+    if (typeof output[key] === 'string' && output[key]) output[key] = encryptSecret(output[key]);
   }
   return output;
 }
 function hydrateSettings(values) {
   const output = { ...values };
-  for (const key of ['apiKey', 'githubToken']) output[key] = decryptSecret(output[key]);
+  for (const key of ['apiKey', 'githubToken', 'telegramToken']) output[key] = decryptSecret(output[key]);
   return output;
 }
 
 function applyEnv(values = {}) {
   const map = {
-    baseURL: 'CUSTOM_AI_BASE_URL', apiKey: 'CUSTOM_AI_API_KEY', provider: 'CUSTOM_AI_PROVIDER',
-    model: 'CUSTOM_AI_MODEL', modelName: 'CUSTOM_AI_MODEL_NAME', providerName: 'CUSTOM_AI_PROVIDER_NAME',
-    defaultModel: 'DEFAULT_MODEL', githubToken: 'GITHUB_TOKEN',
+    baseURL: 'CUSTOM_AI_BASE_URL',
+    apiKey: 'CUSTOM_AI_API_KEY',
+    provider: 'CUSTOM_AI_PROVIDER',
+    model: 'CUSTOM_AI_MODEL',
+    modelName: 'CUSTOM_AI_MODEL_NAME',
+    providerName: 'CUSTOM_AI_PROVIDER_NAME',
+    defaultModel: 'DEFAULT_MODEL',
+    githubToken: 'GITHUB_TOKEN',
+    telegramToken: 'TELEGRAM_BOT_TOKEN',
+    telegramAllowedUserIds: 'TELEGRAM_ALLOWED_USER_IDS',
   };
   for (const [key, envName] of Object.entries(map)) {
     if (values[key] !== undefined && values[key] !== null) process.env[envName] = String(values[key]);
   }
   if (values.username) config.auth.username = values.username;
   if (values.password) config.auth.password = values.password;
-  if (values.username || values.passwordHash) setRuntimeCredentials({ username: values.username, passwordSalt: values.passwordSalt, passwordHash: values.passwordHash });
+  if (values.username || values.passwordHash) {
+    setRuntimeCredentials({
+      username: values.username,
+      passwordSalt: values.passwordSalt,
+      passwordHash: values.passwordHash,
+    });
+  }
   config.customAI.baseURL = process.env.CUSTOM_AI_BASE_URL || null;
   config.customAI.apiKey = process.env.CUSTOM_AI_API_KEY || null;
-  config.customAI.provider = process.env.CUSTOM_AI_PROVIDER || 'custom';
+  config.customAI.provider = process.env.CUSTOM_AI_PROVIDER || 'china-gpt';
   config.customAI.model = process.env.CUSTOM_AI_MODEL || null;
   config.customAI.modelName = process.env.CUSTOM_AI_MODEL_NAME || null;
   config.customAI.providerName = process.env.CUSTOM_AI_PROVIDER_NAME || null;
   config.agent.defaultModel = process.env.DEFAULT_MODEL || '';
   config.github.token = process.env.GITHUB_TOKEN || null;
+  config.telegram.token = process.env.TELEGRAM_BOT_TOKEN || null;
+  const ids = String(process.env.TELEGRAM_ALLOWED_USER_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  config.telegram.allowedUserIds = ids;
 }
 
 export async function loadRuntimeSettings() {

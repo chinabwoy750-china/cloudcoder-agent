@@ -66,11 +66,11 @@ export function validateGitHubEnv() {
 
 export function validateTelegramEnv() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
-    logger.info('[CloudCoder] TELEGRAM_BOT_TOKEN not set. Telegram bot disabled.');
+    logger.info('[CloudCoder] Telegram bot disabled until a token is saved in Admin → Telegram.');
     return false;
   }
   if (!process.env.TELEGRAM_ALLOWED_USER_IDS) {
-    logger.warn('[CloudCoder] TELEGRAM_ALLOWED_USER_IDS is empty — every Telegram user would be rejected. Set at least one numeric user ID.');
+    logger.info('[CloudCoder] Telegram allowed user IDs empty — configure them in Admin → Telegram.');
   }
   return true;
 }
