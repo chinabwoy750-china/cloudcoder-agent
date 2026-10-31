@@ -266,6 +266,7 @@ async function selectWorkspace(id) {
   if (wsPill) { wsPill.hidden = false; wsPill.textContent = selectedMeta?.name || id; }
   const title = $('#project-title'); if (title) title.textContent = selectedMeta?.name || 'Project';
   if (state.previewOpen) refreshPreview(false);
+  refreshSnapshots().catch(() => {});
 
   const info = await api(`/api/workspaces/${id}`).catch(() => null);
   const dl = $('#ws-info');
@@ -928,29 +929,60 @@ $('#visual-save')?.addEventListener('click', async () => {
   const selector = visualSelection.selector;
   const declarations = [];
   const color = $('#visual-color').value; const background = $('#visual-background').value;
+  const textValue = ($('#visual-text')?.value || '').trim();
   const font = Number($('#visual-font-size').value); const padding = Number($('#visual-padding').value); const radius = Number($('#visual-radius').value);
   if (/^#[0-9a-f]{6}$/i.test(color)) declarations.push(`color: ${color} !important`);
   if (/^#[0-9a-f]{6}$/i.test(background)) declarations.push(`background-color: ${background} !important`);
   if (Number.isFinite(font) && font >= 8 && font <= 96) declarations.push(`font-size: ${font}px !important`);
   if (Number.isFinite(padding) && padding >= 0 && padding <= 160) declarations.push(`padding: ${padding}px !important`);
   if (Number.isFinite(radius) && radius >= 0 && radius <= 100) declarations.push(`border-radius: ${radius}px !important`);
-  if (!declarations.length) return toast('Enter at least one valid style value', 'err');
+  if (!declarations.length && !textValue) return toast('Enter a style value or text content', 'err');
   const btn = $('#visual-save'); btn.disabled = true;
   try {
     const path = '.universal-modder-visual.css';
     let existing = '';
-    try { const res = await fetch(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file?path=${encodeURIComponent(path)}`, { credentials:'same-origin', headers:{'X-CloudCoder-CSRF':'1'} }); if (res.ok) existing = await res.text(); } catch {}
+    try {
+      const res = await fetch(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file?path=${encodeURIComponent(path)}`, { credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+      if (res.ok) existing = await res.text();
+    } catch {}
     const safeSelector = selector.replace(/\s+/g, ' ').trim();
-    const block = `\n/* Universal Modder visual edit: ${new Date().toISOString()} */\n${safeSelector} { ${declarations.join('; ')}; }\n`;
-    const escaped = safeSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const rule = new RegExp(`(?:^|\\n)${escaped}\\s*\\{[^}]*\\}\\s*`, 'g');
-    const content = (existing.replace(rule, '\n') + block).slice(-100000);
-    await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file`, { method:'PUT', body: JSON.stringify({ path, content }) });
+    if (declarations.length) {
+      const block = `\n/* Universal Modder visual edit: ${new Date().toISOString()} */\n${safeSelector} { ${declarations.join('; ')}; }\n`;
+      const escaped = safeSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rule = new RegExp(`(?:^|\\n)${escaped}\\s*\\{[^}]*\\}\\s*`, 'g');
+      const content = (existing.replace(rule, '\n') + block).slice(-100000);
+      await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file`, { method: 'PUT', body: JSON.stringify({ path, content }) });
+    }
+    if (textValue) {
+      const mapPath = '.universal-modder-visual-text.json';
+      let map = {};
+      try {
+        const res = await fetch(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file?path=${encodeURIComponent(mapPath)}`, { credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+        if (res.ok) map = JSON.parse(await res.text() || '{}');
+      } catch { map = {}; }
+      if (typeof map !== 'object' || !map) map = {};
+      map[safeSelector] = textValue.slice(0, 500);
+      await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/file`, {
+        method: 'PUT',
+        body: JSON.stringify({ path: mapPath, content: JSON.stringify(map, null, 2) }),
+      });
+      // Best-effort: push text into live iframe selection without claiming full source mapping for frameworks.
+      try {
+        const frame = $('#preview-frame');
+        frame?.contentWindow?.postMessage({ type: 'um-visual-set-text', selector: safeSelector, text: textValue }, '*');
+      } catch {}
+    }
     await refreshPreview(false);
-    $('#visual-editor-status').textContent = 'Saved to .universal-modder-visual.css and refreshed preview.';
+    $('#visual-editor-status').textContent = textValue
+      ? 'Saved CSS/text overrides to project files and refreshed preview.'
+      : 'Saved to .universal-modder-visual.css and refreshed preview.';
     toast('Visual changes saved to project files', 'ok');
-  } catch (err) { $('#visual-editor-status').textContent = err.message; toast(`Could not save visual edit: ${err.message}`, 'err'); }
-  finally { btn.disabled = !visualSelection; }
+  } catch (err) {
+    $('#visual-editor-status').textContent = err.message;
+    toast(`Could not save visual edit: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = !visualSelection;
+  }
 });
 
 /* ---------------- Site-managed settings ---------------- */
@@ -1111,3 +1143,74 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+/* ---------------- Version history (snapshots) ---------------- */
+async function refreshSnapshots() {
+  const ul = $('#snapshot-list');
+  if (!ul || !state.workspaceId) return;
+  ul.innerHTML = '<li class="muted">Loading…</li>';
+  try {
+    const res = await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/snapshots`);
+    const snaps = res.snapshots || res || [];
+    ul.innerHTML = '';
+    if (!snaps.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'No snapshots yet';
+      ul.appendChild(li);
+      return;
+    }
+    for (const s of snaps.slice(0, 20)) {
+      const li = document.createElement('li');
+      li.className = 'snapshot-item';
+      const label = s.label || s.id;
+      const when = s.createdAt ? new Date(s.createdAt).toLocaleString() : '';
+      li.innerHTML = `<div class="snapshot-meta"><strong>${escapeHtml(String(label).slice(0, 48))}</strong><span class="muted small">${escapeHtml(when)} · ${s.files || 0} files</span></div>`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ghost-btn';
+      btn.textContent = 'Restore';
+      btn.addEventListener('click', async () => {
+        if (!confirm('Restore this snapshot? Current unsnapshotted changes will be overwritten.')) return;
+        btn.disabled = true;
+        try {
+          await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/snapshots/${encodeURIComponent(s.id)}/restore`, {
+            method: 'POST',
+            body: JSON.stringify({ confirm: true }),
+          });
+          toast('Snapshot restored', 'ok');
+          await refreshFiles().catch(() => {});
+          if (state.previewOpen) await refreshPreview(false);
+          await refreshSnapshots();
+        } catch (err) {
+          toast(err.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+  } catch (err) {
+    ul.innerHTML = '';
+    const li = document.createElement('li');
+    li.className = 'muted';
+    li.textContent = err.message || 'Failed to load snapshots';
+    ul.appendChild(li);
+  }
+}
+
+$('#btn-snapshot')?.addEventListener('click', async () => {
+  if (!state.workspaceId) return toast('Select a workspace first', 'err');
+  const label = prompt('Snapshot label (optional)') || '';
+  try {
+    await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    });
+    toast('Snapshot created', 'ok');
+    await refreshSnapshots();
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+});

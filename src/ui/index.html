@@ -145,6 +145,7 @@
         <div class="visual-fields">
           <label class="field"><span>Text color</span><input id="visual-color" type="color" value="#222222" /></label>
           <label class="field"><span>Background</span><input id="visual-background" type="color" value="#ffffff" /></label>
+          <label class="field"><span>Text content</span><input id="visual-text" type="text" maxlength="500" placeholder="Optional text override" /></label>
           <label class="field"><span>Font size (px)</span><input id="visual-font-size" type="number" min="8" max="96" placeholder="16" /></label>
           <label class="field"><span>Padding (px)</span><input id="visual-padding" type="number" min="0" max="160" placeholder="0" /></label>
           <label class="field"><span>Border radius (px)</span><input id="visual-radius" type="number" min="0" max="100" placeholder="0" /></label>
@@ -356,6 +357,15 @@
         <h3>Changed files</h3>
       </div>
       <ul id="changed-list" class="list small"></ul>
+    </section>
+
+    <section class="inspector-section">
+      <div class="inspector-section-head">
+        <h3>Version history</h3>
+        <button id="btn-snapshot" class="icon-btn-xs" type="button" title="Create snapshot">＋</button>
+      </div>
+      <ul id="snapshot-list" class="list small"></ul>
+      <p class="muted small">Snapshots capture the project before risky edits. Restore requires confirmation.</p>
     </section>
 
     <section class="inspector-section">

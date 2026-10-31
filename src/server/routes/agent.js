@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createJob, getJob, getJobWithFallback, emit, finish, cancel, subscribe, listJobs, listJobsForOwner } from '../../jobs/registry.js';
+import { createWorkspaceSnapshot } from '../../workspace/snapshots.js';
 import { runAgentTask } from '../../agent/tasks.js';
 import { resolveWorkspace } from '../../workspace/manager.js';
 import { config } from '../../config/env.js';
@@ -43,9 +44,23 @@ export function agentRouter() {
             resolveDefaultModelRef() ||
             config.agent.defaultModel ||
             undefined;
-          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode, ownerUserId: req.authUserId || null } });
+          let snapshotMeta = null;
+          if (mode === 'build') {
+            try {
+              snapshotMeta = await createWorkspaceSnapshot(workspaceId, `pre-agent ${new Date().toISOString()}`);
+            } catch (snapErr) {
+              // Non-fatal: continue agent run but report snapshot failure
+              snapshotMeta = { error: snapErr.message };
+            }
+          }
+          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode, ownerUserId: req.authUserId || null, snapshotId: snapshotMeta?.id || null } });
           res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null, mode });
 
+          if (snapshotMeta?.id) {
+            emit(job, { type: 'status', message: `Recovery snapshot ${snapshotMeta.id}`, phase: 'snapshot', snapshotId: snapshotMeta.id });
+          } else if (snapshotMeta?.error) {
+            emit(job, { type: 'status', message: `Snapshot skipped: ${snapshotMeta.error}`, phase: 'snapshot' });
+          }
           runAgentTask({
             directory: dir,
             prompt,

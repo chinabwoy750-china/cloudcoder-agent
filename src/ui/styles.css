@@ -857,3 +857,7 @@ input:focus, textarea:focus, select:focus {
 .verification-box { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.25); color: #d7dceb; font-size: 11px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
 .verification-box.ok { border: 1px solid rgba(52, 211, 153, 0.35); }
 .verification-box.bad { border: 1px solid rgba(248, 113, 113, 0.4); }
+
+.snapshot-item { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.snapshot-meta { display: flex; flex-direction: column; gap: 2px; }
+.snapshot-item .ghost-btn { align-self: flex-start; }
