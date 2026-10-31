@@ -340,7 +340,15 @@
     </header>
 
     <div class="ws-card">
-      <dl id="ws-info" class="kv"></dl>
+      
+      <div class="inspector-block" id="agent-activity-block">
+        <h3>Agent activity</h3>
+        <ul id="agent-task-list" class="task-list"></ul>
+        <div id="agent-status-line" class="muted small" role="status">Idle</div>
+        <pre id="agent-verification" class="verification-box hidden"></pre>
+        <div id="agent-log" class="agent-log" aria-live="polite"></div>
+      </div>
+<dl id="ws-info" class="kv"></dl>
     </div>
 
     <section class="inspector-section">

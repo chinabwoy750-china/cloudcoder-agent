@@ -559,12 +559,25 @@ function streamJob(jobId) {
   state.stream = es;
   let agentBody = null;
   let agentRaw = '';
+  resetAgentActivity();
 
   es.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
 
-    if (ev.type === 'part') {
+    if (ev.type === 'session') {
+      setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
+      appendAgentLog(`session ${ev.sessionId || ''}`);
+    } else if (ev.type === 'task_list') {
+      renderTaskList(ev.items || [], ev.mode);
+    } else if (ev.type === 'status') {
+      setAgentStatus(ev.message || ev.phase || 'Working…');
+      appendAgentLog(ev.message || ev.phase || 'status');
+    } else if (ev.type === 'verification') {
+      renderVerification(ev.verification, ev.repairRound);
+      const ok = ev.verification?.successCriteria?.ok;
+      appendAgentLog(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
+    } else if (ev.type === 'part') {
       const role = ev.role || 'assistant';
       if (role === 'user' || role === 'system') return;
       const p = ev.part || {};
@@ -575,30 +588,123 @@ function streamJob(jobId) {
         const m = $('#messages');
         m.scrollTop = m.scrollHeight;
       } else if (p.type === 'tool') {
-        addMessage('tool', `🔧 ${p.tool || 'tool'}`);
+        const label = `🔧 ${p.tool || 'tool'}`;
+        addMessage('tool', label);
+        appendAgentLog(label);
       } else if (p.type === 'reasoning' && p.text) {
         addMessage('tool', `💭 ${p.text.slice(0, 500)}`);
       }
     } else if (ev.type === 'done') {
-      addMessage('tool', ev.status === 'completed' ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
+      const ok = ev.status === 'completed';
+      addMessage('tool', ok ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
+      setAgentStatus(ok ? 'Completed' : `Failed: ${ev.error || ev.status}`);
+      appendAgentLog(ok ? 'done' : `failed: ${ev.error || ev.status}`);
       es.close();
       state.stream = null;
       state.jobId = null;
-      state.jobId = null;
-      $('#cancel-btn').classList.add('hidden');
+      $('#cancel-btn')?.classList.add('hidden');
       updateComposerState();
-      refreshStatus();
-      refreshFiles();
-      if (state.previewOpen) refreshPreview(false);
+      if (state.workspaceId) {
+        refreshFiles().catch(() => {});
+        if (state.previewOpen) refreshPreview(false);
+      }
     }
   };
+
   es.onerror = () => {
+    addMessage('tool', '⚠️ Stream disconnected');
+    setAgentStatus('Stream disconnected');
     es.close();
     state.stream = null;
     state.jobId = null;
-    $('#cancel-btn').classList.add('hidden');
+    $('#cancel-btn')?.classList.add('hidden');
     updateComposerState();
   };
+}
+
+function resetAgentActivity() {
+  const list = $('#agent-task-list');
+  if (list) list.innerHTML = '';
+  setAgentStatus('Running…');
+  const ver = $('#agent-verification');
+  if (ver) { ver.textContent = ''; ver.classList.add('hidden'); }
+  const log = $('#agent-log');
+  if (log) log.innerHTML = '';
+}
+
+function renderTaskList(items, mode) {
+  const list = $('#agent-task-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (mode) {
+    const li = document.createElement('li');
+    li.className = 'task-mode';
+    li.textContent = `Mode: ${mode}`;
+    list.appendChild(li);
+  }
+  for (const item of items || []) {
+    const li = document.createElement('li');
+    li.textContent = item;
+    list.appendChild(li);
+  }
+}
+
+function setAgentStatus(text) {
+  const el = $('#agent-status-line');
+  if (el) el.textContent = text || 'Idle';
+}
+
+function appendAgentLog(line) {
+  const log = $('#agent-log');
+  if (!log) return;
+  const row = document.createElement('div');
+  row.className = 'agent-log-line';
+  const ts = new Date().toLocaleTimeString();
+  row.textContent = `${ts} · ${line}`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderVerification(verification, repairRound) {
+  const box = $('#agent-verification');
+  if (!box || !verification) return;
+  const diff = verification.diff || {};
+  const lines = [];
+  if (repairRound) lines.push(`Repair round ${repairRound}`);
+  lines.push(`Files touched: ${diff.totalTouched ?? 0}`);
+  if (diff.changed?.length) lines.push(`Changed: ${diff.changed.slice(0, 12).join(', ')}`);
+  if (diff.added?.length) lines.push(`Added: ${diff.added.slice(0, 12).join(', ')}`);
+  if (diff.removed?.length) lines.push(`Removed: ${diff.removed.slice(0, 12).join(', ')}`);
+  for (const a of verification.actions || []) {
+    lines.push(`${a.action}: ${a.ok ? 'ok' : 'failed'}${a.isolation ? ` (${a.isolation})` : ''}`);
+  }
+  if (verification.successCriteria?.reason) lines.push(verification.successCriteria.reason);
+  box.textContent = lines.join('\n');
+  box.classList.remove('hidden');
+  box.classList.toggle('ok', Boolean(verification.successCriteria?.ok));
+  box.classList.toggle('bad', verification.successCriteria && !verification.successCriteria.ok);
+
+  const ul = $('#changed-list');
+  if (ul) {
+    ul.innerHTML = '';
+    const entries = [
+      ...(diff.changed || []).map((f) => ({ f, k: 'M' })),
+      ...(diff.added || []).map((f) => ({ f, k: 'A' })),
+      ...(diff.removed || []).map((f) => ({ f, k: 'D' })),
+    ].slice(0, 40);
+    if (!entries.length) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'No file changes detected';
+      ul.appendChild(li);
+    } else {
+      for (const { f, k } of entries) {
+        const li = document.createElement('li');
+        li.textContent = `${k} ${f}`;
+        ul.appendChild(li);
+      }
+    }
+  }
 }
 
 $('#cancel-btn').addEventListener('click', async () => {
