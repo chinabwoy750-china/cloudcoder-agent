@@ -116,8 +116,10 @@
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
       </button>
       <div class="topbar-title">
-        <span class="brand-mobile" id="project-title">Universal Modder</span>
-        <span class="ws-pill" id="ws-pill" hidden></span>
+        <div class="topbar-title-stack">
+          <span class="brand-mobile" id="project-title">Universal Modder</span>
+          <span class="ws-pill" id="ws-pill" hidden></span>
+        </div>
       </div>
       <button id="preview-toggle" class="preview-toggle" type="button" aria-label="Open website preview" title="Open website preview">
         <span class="preview-toggle-label">Preview</span>
@@ -160,14 +162,31 @@
     <!-- CHAT -->
     <section id="view-chat" class="view">
       <div id="messages" class="messages" aria-live="polite">
+        <div id="action-history" class="action-history hidden" aria-live="polite">
+          <button type="button" class="action-history-toggle" id="action-history-toggle" aria-expanded="true">
+            <span class="action-history-icon">◷</span>
+            <span class="action-history-title">Action history</span>
+            <span id="action-history-summary" class="action-history-summary muted small"></span>
+            <span class="action-history-chev" aria-hidden="true">▾</span>
+          </button>
+          <div id="action-history-body" class="action-history-body">
+            <div id="action-status-phrase" class="action-status-phrase" role="status"></div>
+            <ul id="action-steps" class="action-steps"></ul>
+            <pre id="action-stream" class="action-stream" aria-label="Live agent stream"></pre>
+            <div id="action-files" class="action-files hidden">
+              <div class="action-files-head">Files touched</div>
+              <ul id="action-files-list"></ul>
+            </div>
+          </div>
+        </div>
         <div class="empty-state" id="empty-state">
           <div class="empty-icon">
             <svg viewBox="0 0 32 32" width="34" height="34" fill="none">
               <path d="M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22" stroke="url(#lg1)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <h3 id="empty-title">What's on your mind?</h3>
-          <p id="empty-copy">Describe the website or web app you want to create.</p>
+          <h3 id="empty-title">What do you want to build?</h3>
+          <p id="empty-copy">Describe a website, web app, or change. Watch progress in Action history.</p>
           <div class="suggestions" id="suggestions">
             <button class="suggestion" type="button" data-prompt="Summarize this project's structure and stack.">Summarize this project</button>
             <button class="suggestion" type="button" data-prompt="Find bugs in this project and propose fixes.">Find bugs</button>
@@ -254,16 +273,24 @@
 
     <!-- SETTINGS -->
     <section id="view-settings" class="view hidden">
-      <div class="panel">
-        <header class="panel-head">
+      <div class="panel admin-panel">
+        <header class="panel-head admin-head">
           <div>
             <h2>Admin panel</h2>
-            <p class="muted small">Manage providers, models, integrations and account settings for Universal Modder.</p>
+            <p class="muted small">Providers, models, integrations and account.</p>
           </div>
         </header>
-        <div class="settings-group settings-wide">
-          <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">Configure China-GPT or another OpenAI-compatible endpoint here. Secrets are saved server-side, never returned to the browser.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
-          <form id="provider-settings-form" class="settings-form">
+        <div class="settings-tabs" role="tablist" aria-label="Admin sections">
+          <button type="button" class="settings-tab active" data-settings-tab="provider" role="tab" aria-selected="true">Provider</button>
+          <button type="button" class="settings-tab" data-settings-tab="routing" role="tab" aria-selected="false">Routing</button>
+          <button type="button" class="settings-tab" data-settings-tab="github" role="tab" aria-selected="false">GitHub</button>
+          <button type="button" class="settings-tab" data-settings-tab="account" role="tab" aria-selected="false">Account</button>
+        </div>
+        <div class="settings-panes">
+          <div class="settings-pane active" data-settings-pane="provider">
+            <div class="settings-group settings-wide">
+              <div class="settings-title-row"><div><h3>Custom AI provider</h3><p class="muted small">China-GPT or another OpenAI-compatible endpoint. Secrets stay server-side.</p></div><span id="provider-status" class="status-chip">Checking…</span></div>
+              <form id="provider-settings-form" class="settings-form">
             <label class="field"><span>Base URL</span><input id="provider-base-url" type="url" placeholder="https://your-gateway.example/v1" required /></label>
             <div class="settings-grid">
               <label class="field"><span>Provider ID</span><input id="provider-id" placeholder="china-gpt" required maxlength="64" /></label>
@@ -275,13 +302,31 @@
               <label class="field"><span>Model display name</span><input id="provider-model-name" placeholder="MiniMax M2.7" /></label>
             </div>
             <div class="row wrap settings-actions"><button id="refresh-provider-models" class="ghost-btn" type="button">Refresh models</button><button id="save-provider-settings" class="primary-btn" type="submit">Save provider & restart</button></div>
-            <p class="muted small" id="provider-note">Site settings are kept in a private runtime file. Render's filesystem is ephemeral unless you attach a persistent disk, so settings may reset on redeploy.</p>
           </form>
-        </div>
-        <div class="settings-group settings-wide">
-          <h3>Model routing</h3>
-          <p class="muted small">Choose which model Universal Modder uses for each task type. Leave a field blank to use the configured default. Model IDs come from your provider's catalog; image, video and audio selections are saved for the generation integrations.</p>
-          <form id="model-routing-form" class="settings-form">
+              <p class="muted small" id="provider-note">Settings persist via Upstash/Postgres when configured; otherwise runtime storage may reset on redeploy.</p>
+            </div>
+            <div class="settings-group">
+              <h3>Preferred model</h3>
+              <p class="muted small">Remembered on this device. Options come from the configured endpoint.</p>
+              <div class="select-wrap wide">
+                <select id="settings-model" aria-label="Preferred model">
+                  <option value="">default model</option>
+                </select>
+                <svg class="select-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <dl id="model-meta" class="kv model-meta">
+                <dt>Default</dt><dd id="meta-default">—</dd>
+                <dt>Discovery</dt><dd id="meta-source">—</dd>
+                <dt>OpenCode</dt><dd id="meta-opencode">—</dd>
+                <dt>Note</dt><dd id="meta-error">—</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="settings-pane" data-settings-pane="routing">
+            <div class="settings-group settings-wide">
+              <h3>Model routing</h3>
+              <p class="muted small">Optional per-task model overrides.</p>
+              <form id="model-routing-form" class="settings-form">
             <label class="field"><span>Build model</span><input id="routing-build" list="provider-model-options" placeholder="Use default model" /></label>
             <label class="field"><span>Plan model</span><input id="routing-plan" list="provider-model-options" placeholder="Use default model" /></label>
             <label class="field"><span>Image generation model</span><input id="routing-image" list="provider-model-options" placeholder="Image model ID" /></label>
@@ -289,49 +334,39 @@
             <label class="field"><span>Audio generation model</span><input id="routing-audio" list="provider-model-options" placeholder="Audio / TTS model ID" /></label>
             <button class="primary-btn" type="submit">Save model routing</button>
           </form>
-        </div>
-        <div class="settings-group">
-          <h3>Preferred model</h3>
-          <p class="muted small">Your selection is remembered on this device. Options come from the configured endpoint.</p>
-          <div class="select-wrap wide">
-            <select id="settings-model" aria-label="Preferred model">
-              <option value="">default model</option>
-            </select>
-            <svg class="select-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
           </div>
-          <dl id="model-meta" class="kv model-meta">
-            <dt>Default</dt><dd id="meta-default">—</dd>
-            <dt>Discovery</dt><dd id="meta-source">—</dd>
-            <dt>OpenCode</dt><dd id="meta-opencode">—</dd>
-            <dt>Note</dt><dd id="meta-error">—</dd>
-          </dl>
-        </div>
-        <div class="settings-group">
-          <h3>GitHub integration</h3>
-          <p class="muted small">Optional. Add a personal access token to enable private repository listing, cloning and GitHub operations. The token is never sent back to the browser.</p>
-          <form id="github-settings-form" class="settings-form">
+          <div class="settings-pane" data-settings-pane="github">
+            <div class="settings-group settings-wide">
+              <h3>GitHub integration</h3>
+              <p class="muted small">Token enables private repos, clone and PRs. Never sent back to the browser.</p>
+              <form id="github-settings-form" class="settings-form">
             <label class="field"><span>GitHub token</span><input id="github-token" type="password" autocomplete="new-password" placeholder="Paste token to add or replace it" /></label>
             <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span><button class="ghost-btn" type="submit">Save GitHub settings</button></div>
           </form>
-        </div>
-        <div class="settings-group">
-          <h3>Website login</h3>
-          <p class="muted small">Render environment credentials remain the bootstrap fallback. You can optionally override the username and password here.</p>
-          <form id="account-settings-form" class="settings-form">
+              <div class="row wrap settings-actions"><span id="github-token-status" class="status-chip">Checking…</span></div>
+            </div>
+          </div>
+          <div class="settings-pane" data-settings-pane="account">
+            <div class="settings-group settings-wide">
+              <h3>Website login</h3>
+              <p class="muted small">Optional override of bootstrap credentials.</p>
+              <form id="account-settings-form" class="settings-form">
             <label class="field"><span>Username</span><input id="account-username" autocomplete="username" required maxlength="80" /></label>
             <label class="field"><span>New password <small class="muted">(optional; 12+ characters)</small></span><input id="account-password" type="password" autocomplete="new-password" minlength="12" placeholder="Leave blank to keep the current password" /></label>
             <label class="checkbox-line"><input id="account-use-env-password" type="checkbox" /> <span>Use the password from Render environment instead</span></label>
             <button class="ghost-btn" type="submit">Save login settings</button>
           </form>
-          <div class="settings-divider"></div>
-          <p class="muted small">Sign out of this browser.</p>
-          <button id="logout-btn" class="danger-btn" type="button">Sign out</button>
+              <div class="settings-divider"></div>
+              <p class="muted small">Sign out of this browser.</p>
+              <button id="logout-btn" class="danger-btn" type="button">Sign out</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
-  </main>
 
-  <!-- INSPECTOR -->
+<!-- INSPECTOR -->
   <aside id="inspector" class="inspector">
     <header class="inspector-head">
       <h2>Workspace</h2>

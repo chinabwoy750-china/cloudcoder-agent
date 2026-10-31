@@ -129,6 +129,119 @@ $('#logout-btn').addEventListener('click', async () => {
 
 /* ---------------- Drawers (mobile) ---------------- */
 
+
+/* Admin settings tabs (non-scroll-all layout) */
+document.querySelectorAll('.settings-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.settingsTab;
+    document.querySelectorAll('.settings-tab').forEach((b) => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+    document.querySelectorAll('.settings-pane').forEach((pane) => {
+      pane.classList.toggle('active', pane.dataset.settingsPane === id);
+    });
+  });
+});
+
+$('#action-history-toggle')?.addEventListener('click', () => {
+  const el = $('#action-history');
+  if (!el) return;
+  el.classList.toggle('collapsed');
+  const open = !el.classList.contains('collapsed');
+  $('#action-history-toggle')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+
+const STATUS_PHRASES = [
+  'Inspecting the workspace…',
+  'Reading project structure…',
+  'Planning the changes…',
+  'Preparing file edits…',
+  'Writing project files…',
+  'Verifying the build…',
+  'Polishing the result…',
+];
+let phraseTimer = null;
+let phraseIdx = 0;
+
+function showActionHistory() {
+  const el = $('#action-history');
+  if (!el) return;
+  el.classList.remove('hidden', 'collapsed');
+  $('#action-history-toggle')?.setAttribute('aria-expanded', 'true');
+}
+
+function setStatusPhrase(text, pulsing = true) {
+  const el = $('#action-status-phrase');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('pulse', Boolean(pulsing && text));
+}
+
+function startStatusPhrases() {
+  stopStatusPhrases();
+  phraseIdx = 0;
+  setStatusPhrase(STATUS_PHRASES[0], true);
+  phraseTimer = setInterval(() => {
+    phraseIdx = (phraseIdx + 1) % STATUS_PHRASES.length;
+    setStatusPhrase(STATUS_PHRASES[phraseIdx], true);
+  }, 4500);
+}
+
+function stopStatusPhrases() {
+  if (phraseTimer) clearInterval(phraseTimer);
+  phraseTimer = null;
+}
+
+function appendActionStep(label, { done = false } = {}) {
+  const ul = $('#action-steps');
+  if (!ul) return;
+  const li = document.createElement('li');
+  if (done) li.classList.add('done');
+  li.innerHTML = `<span class="tool-icon">⚒</span><span>${escapeHtml(label)}</span>`;
+  ul.appendChild(li);
+  return li;
+}
+
+function appendActionStream(line) {
+  const pre = $('#action-stream');
+  if (!pre) return;
+  pre.textContent += (pre.textContent ? '\n' : '') + line;
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function renderActionFiles(verification) {
+  const wrap = $('#action-files');
+  const ul = $('#action-files-list');
+  if (!wrap || !ul) return;
+  const diff = verification?.diff || {};
+  const files = [
+    ...(diff.changed || []).map((f) => ({ f, k: 'M' })),
+    ...(diff.added || []).map((f) => ({ f, k: 'A' })),
+    ...(diff.removed || []).map((f) => ({ f, k: 'D' })),
+  ].slice(0, 30);
+  ul.innerHTML = '';
+  if (!files.length) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  for (const { f, k } of files) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="check">✓</span><span>${escapeHtml(k)} ${escapeHtml(f)}</span>`;
+    ul.appendChild(li);
+  }
+}
+
+function resetActionHistory() {
+  showActionHistory();
+  const steps = $('#action-steps'); if (steps) steps.innerHTML = '';
+  const stream = $('#action-stream'); if (stream) stream.textContent = '';
+  const files = $('#action-files'); if (files) files.classList.add('hidden');
+  const sum = $('#action-history-summary'); if (sum) sum.textContent = 'Running…';
+  startStatusPhrases();
+}
+
 function closeDrawers() {
   $('#sidebar')?.classList.remove('open');
   $('#inspector')?.classList.remove('open');
@@ -188,7 +301,7 @@ function updateComposerState() {
   if (prompt) {
     prompt.disabled = !canType;
     prompt.placeholder = !ready
-      ? 'Connecting to the coding engine…'
+      ? 'Getting the coding engine ready…'
       : hasWs
         ? 'Tell Universal Modder what to change…'
         : 'Describe what you want to build…';
@@ -537,6 +650,8 @@ $('#composer').addEventListener('submit', async (e) => {
       body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, mode }),
     });
     state.jobId = jobId;
+    resetActionHistory();
+    setStatusPhrase('Discovering the request…', true);
     streamJob(jobId);
   } catch (err) {
     addMessage('tool', `Error: ${err.message}`);
@@ -561,6 +676,7 @@ function streamJob(jobId) {
   let agentBody = null;
   let agentRaw = '';
   resetAgentActivity();
+  resetActionHistory();
 
   es.onmessage = (e) => {
     let ev;
@@ -569,37 +685,63 @@ function streamJob(jobId) {
     if (ev.type === 'session') {
       setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
       appendAgentLog(`session ${ev.sessionId || ''}`);
+      appendActionStream(`session ${ev.sessionId || ''}`);
+      setStatusPhrase('Connecting tools…', true);
     } else if (ev.type === 'task_list') {
       renderTaskList(ev.items || [], ev.mode);
+      for (const item of ev.items || []) appendActionStep(item);
+      setStatusPhrase(ev.mode === 'plan' ? 'Drafting the plan…' : 'Working through the task list…', true);
     } else if (ev.type === 'status') {
       setAgentStatus(ev.message || ev.phase || 'Working…');
       appendAgentLog(ev.message || ev.phase || 'status');
+      appendActionStream(ev.message || ev.phase || 'status');
+      if (ev.phase === 'snapshot') setStatusPhrase('Creating recovery snapshot…', true);
+      else if (ev.phase === 'inspect') setStatusPhrase('Inspecting the workspace…', true);
+      else if (ev.phase === 'plan') setStatusPhrase('Planning the changes…', true);
+      else if (ev.phase === 'build') setStatusPhrase('Implementing changes…', true);
+      else if (ev.phase === 'repair') setStatusPhrase('Repairing failed checks…', true);
+      else if (ev.message) setStatusPhrase(ev.message, true);
     } else if (ev.type === 'verification') {
       renderVerification(ev.verification, ev.repairRound);
+      renderActionFiles(ev.verification);
       const ok = ev.verification?.successCriteria?.ok;
       appendAgentLog(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
+      appendActionStream(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
+      setStatusPhrase(ok ? 'Verification passed' : 'Checking what still needs work…', !ok);
     } else if (ev.type === 'part') {
       const role = ev.role || 'assistant';
       if (role === 'user' || role === 'system') return;
-      const p = ev.part || {};
-      if (p.type === 'text' && p.text) {
+      const part = ev.part || {};
+      if (part.type === 'text' && part.text) {
         if (!agentBody) agentBody = addMessage('agent', '');
-        agentRaw += p.text;
+        agentRaw += part.text;
         agentBody.innerHTML = renderMarkdown(agentRaw);
         const m = $('#messages');
         m.scrollTop = m.scrollHeight;
-      } else if (p.type === 'tool') {
-        const label = `🔧 ${p.tool || 'tool'}`;
-        addMessage('tool', label);
-        appendAgentLog(label);
-      } else if (p.type === 'reasoning' && p.text) {
-        addMessage('tool', `💭 ${p.text.slice(0, 500)}`);
+        // Mirror a short tail into the live stream panel
+        const tail = part.text.trim();
+        if (tail) appendActionStream(tail.length > 280 ? tail.slice(0, 280) + '…' : tail);
+      } else if (part.type === 'tool') {
+        const label = part.tool || 'tool';
+        appendActionStep(label);
+        appendAgentLog(`tool ${label}`);
+        appendActionStream(`$ ${label}`);
+        setStatusPhrase(`Running ${label}…`, true);
+      } else if (part.type === 'reasoning' && part.text) {
+        appendActionStream(part.text.slice(0, 400));
       }
     } else if (ev.type === 'done') {
       const ok = ev.status === 'completed';
+      stopStatusPhrases();
+      setStatusPhrase(ok ? 'Built' : `Stopped — ${ev.error || ev.status}`, false);
+      const sum = $('#action-history-summary');
+      if (sum) sum.textContent = ok ? 'Completed' : 'Failed';
+      // mark steps done
+      document.querySelectorAll('#action-steps li').forEach((li) => li.classList.add('done'));
       addMessage('tool', ok ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
       setAgentStatus(ok ? 'Completed' : `Failed: ${ev.error || ev.status}`);
       appendAgentLog(ok ? 'done' : `failed: ${ev.error || ev.status}`);
+      appendActionStream(ok ? 'done' : `failed: ${ev.error || ev.status}`);
       es.close();
       state.stream = null;
       state.jobId = null;
@@ -613,8 +755,13 @@ function streamJob(jobId) {
   };
 
   es.onerror = () => {
+    stopStatusPhrases();
+    setStatusPhrase('Stream disconnected — reconnect or resend', false);
+    const sum = $('#action-history-summary');
+    if (sum) sum.textContent = 'Disconnected';
     addMessage('tool', '⚠️ Stream disconnected');
     setAgentStatus('Stream disconnected');
+    appendActionStream('stream disconnected');
     es.close();
     state.stream = null;
     state.jobId = null;
