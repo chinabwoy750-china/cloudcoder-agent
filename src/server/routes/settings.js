@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { config } from '../../config/env.js';
 import { fetchCustomModels, getCachedModels, resolveDefaultModelRef, sanitizeModelKey, getProviderId } from '../../config/custom-models.js';
-import { getRuntimeSettings, saveRuntimeSettings } from '../../config/runtime-settings.js';
+import { getRuntimeSettings, getSettingsPersistence, saveRuntimeSettings } from '../../config/runtime-settings.js';
 import { restartOpenCode, isOpenCodeReady } from '../../agent/opencode.js';
 import { logger } from '../../utils/logger.js';
 import crypto from 'node:crypto';
@@ -28,28 +28,7 @@ export function settingsRouter() {
       account: { username: config.auth.username || '', passwordOverride: Boolean(getRuntimeSettings().passwordHash || getRuntimeSettings().password) },
       integrations: { hasGithubToken: Boolean(config.github.token) },
       openCodeReady: isOpenCodeReady(),
-      modelRouting: getRuntimeSettings().modelRouting || {},
-      persistence: 'runtime-file',
-    });
-  });
-
-  router.get('/diagnostics', async (_req, res) => {
-    const cache = getCachedModels();
-    const settings = getRuntimeSettings();
-    const diskPath = process.env.RUNTIME_SETTINGS_PATH || (process.env.RENDER === 'true' ? '/var/data' : '/tmp');
-    let storage = { writable: false, persistentDiskLikely: diskPath.startsWith('/var/data') };
-    try { const fs = await import('node:fs/promises'); await fs.access(diskPath); storage.writable = true; } catch {}
-    res.json({
-      generatedAt: new Date().toISOString(),
-      services: { openCodeReady: isOpenCodeReady(), providerBaseConfigured: Boolean(process.env.CUSTOM_AI_BASE_URL), apiKeyConfigured: Boolean(process.env.CUSTOM_AI_API_KEY), modelCount: (cache.models || []).length, modelDiscovery: cache.source || 'none', modelDiscoveryError: cache.error || null },
-      integrations: { githubConfigured: Boolean(config.github.token), telegramConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN) },
-      settings: { modelRoutingConfigured: Object.keys(settings.modelRouting || {}).filter((key) => Boolean(settings.modelRouting[key])), runtimeSettingsPathConfigured: Boolean(process.env.RUNTIME_SETTINGS_PATH) },
-      storage,
-      warnings: [
-        ...(!storage.persistentDiskLikely ? ['Runtime settings/workspaces may be lost on redeploy unless a persistent disk is mounted.'] : []),
-        ...(!isOpenCodeReady() ? ['OpenCode is not ready; coding tasks may fail until it recovers.'] : []),
-        ...(!process.env.CUSTOM_AI_API_KEY ? ['Provider API key is not configured in the process environment.'] : []),
-      ],
+      persistence: getSettingsPersistence(),
     });
   });
 
@@ -92,19 +71,6 @@ export function settingsRouter() {
     } catch (err) {
       next(err);
     }
-  });
-
-  router.post('/model-routing', async (req, res) => {
-    const body = req.body || {};
-    const keys = ['build', 'plan', 'image', 'video', 'audio'];
-    const modelRouting = {};
-    for (const key of keys) {
-      const value = typeof body[key] === 'string' ? body[key].trim() : '';
-      if (value.length > 200) return res.status(400).json({ error: `${key} model ID must be 200 characters or fewer` });
-      modelRouting[key] = value;
-    }
-    await saveRuntimeSettings({ modelRouting });
-    res.json({ ok: true, message: 'Model routing saved.', modelRouting });
   });
 
   router.post('/integrations', async (req, res) => {

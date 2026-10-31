@@ -5,11 +5,13 @@ import crypto from 'node:crypto';
 import { config } from './env.js';
 import { logger } from '../utils/logger.js';
 import { setRuntimeCredentials } from '../auth/basic.js';
+import { isUpstashConfigured, redisGetJson, redisSetJson } from '../storage/upstash.js';
 
 const SETTINGS_FILE = process.env.RUNTIME_SETTINGS_PATH || (fsSync.existsSync('/var/data') ? '/var/data/universal-modder-settings.json' : '/tmp/universal-modder-settings.json');
 let saved = {};
 
 export function getRuntimeSettings() { return { ...saved }; }
+export function getSettingsPersistence() { return isUpstashConfigured() ? 'upstash-redis' : 'runtime-file'; }
 
 function encryptionKey() {
   return crypto.scryptSync(String(config.session.secret || ''), 'universal-modder-site-settings-v1', 32);
@@ -67,20 +69,57 @@ function applyEnv(values = {}) {
 }
 
 export async function loadRuntimeSettings() {
-  try {
-    saved = hydrateSettings(JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')));
+  let stored = null;
+  if (isUpstashConfigured()) {
+    try {
+      stored = await redisGetJson('runtime-settings');
+      if (stored) {
+        logger.info('[settings] Loaded site-managed runtime settings from Upstash Redis');
+      } else {
+        // One-time migration: if the current instance still has its previous
+        // runtime file, move it into Redis before accepting new settings.
+        try {
+          stored = JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8'));
+          await redisSetJson('runtime-settings', stored);
+          logger.info('[settings] Migrated existing runtime settings file to Upstash Redis');
+        } catch (migrationErr) {
+          if (migrationErr.code !== 'ENOENT') throw migrationErr;
+          logger.info('[settings] No site-managed settings found in Upstash Redis or local file yet');
+        }
+      }
+    } catch (err) {
+      logger.error(`[settings] Upstash Redis read failed: ${err.message}`);
+      // Do not silently load an older file when Redis is configured: that could
+      // overwrite newer settings on the next save and mislead the operator.
+      throw new Error('Upstash Redis is configured but unavailable; refusing to start with potentially stale settings.');
+    }
+  } else {
+    try {
+      stored = JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8'));
+      logger.info('[settings] Loaded site-managed runtime settings from local file');
+    } catch (err) {
+      if (err.code !== 'ENOENT') logger.warn(`[settings] Could not load runtime settings: ${err.message}`);
+    }
+  }
+  if (stored) {
+    saved = hydrateSettings(stored);
     applyEnv(saved);
-    logger.info('[settings] Loaded site-managed runtime settings');
-  } catch (err) {
-    if (err.code !== 'ENOENT') logger.warn(`[settings] Could not load runtime settings: ${err.message}`);
   }
 }
 
 export async function saveRuntimeSettings(values) {
-  saved = { ...saved, ...values };
-  await fs.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.writeFile(SETTINGS_FILE, JSON.stringify(serializableSettings(saved), null, 2), { mode: 0o600 });
-  await fs.chmod(SETTINGS_FILE, 0o600).catch(() => {});
+  const next = { ...saved, ...values };
+  const serialized = serializableSettings(next);
+  if (isUpstashConfigured()) {
+    // Redis is authoritative when configured. Fail the save rather than report
+    // success while settings are only held in ephemeral process memory.
+    await redisSetJson('runtime-settings', serialized);
+  } else {
+    await fs.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
+    await fs.writeFile(SETTINGS_FILE, JSON.stringify(serialized, null, 2), { mode: 0o600 });
+    await fs.chmod(SETTINGS_FILE, 0o600).catch(() => {});
+  }
+  saved = next;
   applyEnv(saved);
   return { ...saved };
 }
