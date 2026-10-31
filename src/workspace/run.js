@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { config } from '../config/env.js';
 import { detectProjectType } from '../git/detect.js';
 import { logger } from '../utils/logger.js';
+import { runIsolatedProcess, runRemoteWorker, isolationMode } from '../worker/runner.js';
 
 /**
  * Map of allowed project actions → argv. The command is chosen by the server
@@ -27,68 +27,39 @@ export function allowedActions(projectType) {
   return Object.keys(recipes).filter((k) => recipes[k].length > 0);
 }
 
-export function runProcess({ cwd, cmd, args = [], timeoutMs = config.limits.commandTimeoutMs, maxBytes = config.limits.maxCommandOutputBytes, env = {} }) {
-  return new Promise((resolve) => {
-    const started = Date.now();
-    const child = spawn(cmd, args, {
-      cwd,
-      env: {
-        ...process.env,
-        ...env,
-        CI: '1',
-        NO_COLOR: '1',
-        GIT_TERMINAL_PROMPT: '0',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
-      detached: process.platform !== 'win32',
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let truncated = false;
-    let timedOut = false;
-
-    const append = (buf, which) => {
-      const s = buf.toString();
-      if (which === 'out') {
-        if (stdout.length < maxBytes) stdout += s;
-        else truncated = true;
-      } else {
-        if (stderr.length < maxBytes) stderr += s;
-        else truncated = true;
-      }
-    };
-
-    child.stdout.on('data', (b) => append(b, 'out'));
-    child.stderr.on('data', (b) => append(b, 'err'));
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        if (process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
-        else child.kill('SIGKILL');
-      } catch { /* ignore */ }
-    }, timeoutMs);
-
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ code: -1, stdout, stderr: stderr + `\n${err.message}`, durationMs: Date.now() - started, timedOut, truncated });
-    });
-
-    child.on('close', (code, signal) => {
-      clearTimeout(timer);
-      resolve({
-        code: timedOut ? -1 : (code ?? -1),
-        signal,
-        stdout: stdout.slice(0, maxBytes),
-        stderr: stderr.slice(0, maxBytes),
-        durationMs: Date.now() - started,
-        timedOut,
-        truncated,
-      });
-    });
-  });
+/**
+ * Run a single command through the isolation layer.
+ */
+export async function runProcess({ cwd, cmd, args = [], timeoutMs = config.limits.commandTimeoutMs, maxBytes = config.limits.maxCommandOutputBytes, network = false }) {
+  const mode = isolationMode();
+  if (mode === 'remote') {
+    try {
+      const remote = await runRemoteWorker({ cwd, cmd, args, timeoutMs, network });
+      return {
+        code: remote.ok ? 0 : (remote.code ?? -1),
+        signal: remote.signal,
+        stdout: String(remote.stdout || '').slice(0, maxBytes),
+        stderr: String(remote.stderr || '').slice(0, maxBytes),
+        durationMs: remote.durationMs,
+        timedOut: Boolean(remote.killed),
+        truncated: false,
+        isolation: 'remote',
+      };
+    } catch (err) {
+      logger.warn(`[worker] remote execution failed, falling back to local: ${err.message}`);
+    }
+  }
+  const result = await runIsolatedProcess({ cwd, cmd, args, timeoutMs, maxBytes, network });
+  return {
+    code: result.ok ? 0 : (result.code ?? -1),
+    signal: result.signal,
+    stdout: String(result.stdout || '').slice(0, maxBytes),
+    stderr: String(result.stderr || '').slice(0, maxBytes),
+    durationMs: result.durationMs,
+    timedOut: Boolean(result.killed),
+    truncated: false,
+    isolation: result.mode || mode,
+  };
 }
 
 /**
@@ -105,17 +76,20 @@ export async function runProjectAction({ dir, action, projectType }) {
       projectType: type,
       action,
       reason: steps ? `No ${action} command defined for ${type}` : `Unknown action "${action}" for ${type}`,
+      isolation: isolationMode(),
     };
   }
 
   const results = [];
+  // install/build often need network when using remote registries
+  const needsNetwork = action === 'install';
   for (const [cmd, args] of steps) {
-    logger.info(`Running ${action} for ${type}: ${cmd} ${args.join(' ')}`);
-    const r = await runProcess({ cwd: dir, cmd, args });
+    logger.info(`Running ${action} for ${type}: ${cmd} ${args.join(' ')} (isolation=${isolationMode()})`);
+    const r = await runProcess({ cwd: dir, cmd, args, network: needsNetwork });
     results.push({ cmd, args, ...r });
     if (r.code !== 0) break;
   }
 
   const ok = results.every((r) => r.code === 0);
-  return { supported: true, projectType: type, action, ok, results };
+  return { supported: true, projectType: type, action, ok, results, isolation: isolationMode() };
 }

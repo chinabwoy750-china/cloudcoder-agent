@@ -14,6 +14,7 @@ import { rateLimitMiddleware } from '../../utils/ratelimit.js';
 import { logger } from '../../utils/logger.js';
 import { createWorkspaceSnapshot, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from '../../workspace/snapshots.js';
 import { assertWorkspaceOwner } from '../../db/workspaces.js';
+import { signPreviewToken, verifyPreviewToken } from '../../auth/preview-token.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -214,8 +215,24 @@ export function filesRouter() {
 
   // Serve the project's real built/static output inside the authenticated preview iframe.
   // Prefer framework build directories; fall back to a root index.html for static projects.
-  router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
+  router.post('/workspaces/:id/preview-token', asyncH(async (req, res) => {
     await requireWorkspaceAccess(req);
+    const token = signPreviewToken({ workspaceId: req.params.id, userId: req.authUserId || null });
+    res.json({
+      token,
+      expiresInSec: 1800,
+      previewPath: `/api/workspaces/${encodeURIComponent(req.params.id)}/preview/?preview_token=${encodeURIComponent(token)}`,
+    });
+  }));
+
+  router.get(['/workspaces/:id/preview', '/workspaces/:id/preview/*'], asyncH(async (req, res) => {
+    const previewToken = req.query.preview_token || req.get('X-Preview-Token');
+    if (previewToken) {
+      const claims = verifyPreviewToken(String(previewToken), req.params.id);
+      if (!claims) return res.status(401).json({ error: 'Invalid or expired preview token' });
+    } else {
+      await requireWorkspaceAccess(req);
+    }
     const dir = await ws.resolveWorkspace(req.params.id);
     const candidates = [path.join(dir, 'dist'), path.join(dir, 'build'), path.join(dir, 'out'), dir];
     let root = dir;

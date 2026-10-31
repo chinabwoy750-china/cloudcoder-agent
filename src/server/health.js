@@ -2,6 +2,7 @@ import { isOpenCodeReady } from '../agent/opencode.js';
 import { config } from '../config/env.js';
 import { postgresHealth } from '../storage/postgres.js';
 import { objectStorageHealth } from '../storage/objects.js';
+import { isolationMode } from '../worker/runner.js';
 
 export async function healthHandler(req, res) {
   const db = await postgresHealth();
@@ -13,6 +14,7 @@ export async function healthHandler(req, res) {
     version: '1.0.0',
     opencode: isOpenCodeReady() ? 'ready' : 'not-ready',
     database: db.configured ? (db.ready ? 'ready' : 'not-ready') : 'not-configured',
+    isolation: isolationMode(),
     objects: {
       mode: objects.mode,
       ready: objects.ready,

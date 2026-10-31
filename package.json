@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test tests/*.js"
+    "test": "node --test tests/*.js",
+    "worker": "node src/worker/service.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

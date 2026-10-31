@@ -44,3 +44,19 @@ services:
         value: /tmp/cloudcoder
       - key: LOG_LEVEL
         value: info
+
+  # Optional isolated worker (same image). Uncomment when you have a paid instance or shared disk.
+  # - type: web
+  #   name: universal-modder-worker
+  #   runtime: docker
+  #   plan: free
+  #   dockerfilePath: ./Dockerfile
+  #   dockerCommand: node src/worker/service.js
+  #   healthCheckPath: /health
+  #   envVars:
+  #     - key: NODE_ENV
+  #       value: production
+  #     - key: WORKER_SHARED_SECRET
+  #       generateValue: true
+  #     - key: WORKSPACE_ROOT
+  #       value: /tmp/cloudcoder
