@@ -104,6 +104,25 @@ async function waitForSessionIdle({ sessionId, directory, signal, onEvent, seen,
         if (role === 'user' || role === 'system') continue;
         if (role === 'assistant') assistantSeen = true;
         onEvent({ type: 'part', role, part });
+        // Structured tool lifecycle for the live UI timeline
+        if (part?.type === 'tool' || part?.tool || part?.name === 'tool') {
+          const toolName = part.tool || part.name || part.toolName || 'tool';
+          const state = part.state || part.status || (part.output || part.result ? 'completed' : 'running');
+          const inputPreview = typeof part.input === 'string'
+            ? part.input
+            : (part.input ? JSON.stringify(part.input).slice(0, 400) : (part.args ? JSON.stringify(part.args).slice(0, 400) : ''));
+          const outputPreview = typeof part.output === 'string'
+            ? part.output.slice(0, 800)
+            : (typeof part.result === 'string' ? part.result.slice(0, 800) : '');
+          onEvent({
+            type: 'tool',
+            tool: toolName,
+            state,
+            input: inputPreview,
+            output: outputPreview,
+            path: part.path || part.filePath || part.filename || null,
+          });
+        }
       }
     }
 

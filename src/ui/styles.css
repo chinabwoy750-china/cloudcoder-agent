@@ -1317,3 +1317,49 @@ input:focus, textarea:focus, select:focus {
   .shell-home .home-center { padding-bottom: 80px; }
 }
 /* Hide legacy sidebar on small screens when using bottom nav home-first UX - keep for desktop */
+
+/* Live agent timeline */
+.action-steps li.action-step {
+  align-items: flex-start;
+}
+.action-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.action-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e8ecf7;
+}
+.action-step-detail {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.35);
+  color: #9aa6bd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow: auto;
+}
+.action-steps li.running {
+  border-color: rgba(167, 139, 250, 0.35);
+  box-shadow: inset 2px 0 0 rgba(167, 139, 250, 0.7);
+}
+.action-steps li.kind-tool .tool-icon { color: #93c5fd; }
+.action-steps li.kind-verify.done .tool-icon { color: #34d399; }
+.action-steps li.kind-error .tool-icon { color: #fb7185; }
+.action-stream {
+  max-height: 280px;
+}
+.action-history {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

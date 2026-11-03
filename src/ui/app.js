@@ -405,20 +405,24 @@ function stopStatusPhrases() {
   phraseTimer = null;
 }
 
-function appendActionStep(label, { done = false } = {}) {
+function appendActionStep(label, { done = false, kind = 'step', detail = '' } = {}) {
   const ul = $('#action-steps');
-  if (!ul) return;
+  if (!ul) return null;
   const li = document.createElement('li');
-  if (done) li.classList.add('done');
-  li.innerHTML = `<span class="tool-icon">⚒</span><span>${escapeHtml(label)}</span>`;
+  li.className = `action-step kind-${kind}${done ? ' done' : ' running'}`;
+  const icon = kind === 'tool' ? '⚙' : kind === 'file' ? '📄' : kind === 'verify' ? '✓' : kind === 'error' ? '!' : '•';
+  li.innerHTML = `<span class="tool-icon">${icon}</span><div class="action-step-body"><span class="action-step-label">${escapeHtml(label)}</span>${detail ? `<pre class="action-step-detail">${escapeHtml(detail)}</pre>` : ''}</div>`;
   ul.appendChild(li);
+  // keep latest in view
+  li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   return li;
 }
 
 function appendActionStream(line) {
   const pre = $('#action-stream');
   if (!pre) return;
-  pre.textContent += (pre.textContent ? '\n' : '') + line;
+  const ts = new Date().toLocaleTimeString();
+  pre.textContent += (pre.textContent ? '\n' : '') + `[${ts}] ${line}`;
   pre.scrollTop = pre.scrollHeight;
 }
 
@@ -431,7 +435,7 @@ function renderActionFiles(verification) {
     ...(diff.changed || []).map((f) => ({ f, k: 'M' })),
     ...(diff.added || []).map((f) => ({ f, k: 'A' })),
     ...(diff.removed || []).map((f) => ({ f, k: 'D' })),
-  ].slice(0, 30);
+  ].slice(0, 40);
   ul.innerHTML = '';
   if (!files.length) {
     wrap.classList.add('hidden');
@@ -450,7 +454,7 @@ function resetActionHistory() {
   const steps = $('#action-steps'); if (steps) steps.innerHTML = '';
   const stream = $('#action-stream'); if (stream) stream.textContent = '';
   const files = $('#action-files'); if (files) files.classList.add('hidden');
-  const sum = $('#action-history-summary'); if (sum) sum.textContent = 'Running…';
+  const sum = $('#action-history-summary'); if (sum) sum.textContent = 'Live';
   startStatusPhrases();
 }
 
@@ -888,8 +892,11 @@ function streamJob(jobId) {
   state.stream = es;
   let agentBody = null;
   let agentRaw = '';
+  const toolRows = new Map();
   resetAgentActivity();
   resetActionHistory();
+  appendActionStep('Agent started', { kind: 'step' });
+  setStatusPhrase('Discovering the request…', true);
 
   es.onmessage = (e) => {
     let ev;
@@ -899,27 +906,61 @@ function streamJob(jobId) {
       setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
       appendAgentLog(`session ${ev.sessionId || ''}`);
       appendActionStream(`session ${ev.sessionId || ''}`);
+      appendActionStep('Session connected', { done: true, kind: 'step' });
       setStatusPhrase('Connecting tools…', true);
     } else if (ev.type === 'task_list') {
       renderTaskList(ev.items || [], ev.mode);
-      for (const item of ev.items || []) appendActionStep(item);
+      for (const item of ev.items || []) appendActionStep(String(item), { kind: 'step' });
       setStatusPhrase(ev.mode === 'plan' ? 'Drafting the plan…' : 'Working through the task list…', true);
+      appendActionStream(`task list (${(ev.items || []).length} items)`);
     } else if (ev.type === 'status') {
       setAgentStatus(ev.message || ev.phase || 'Working…');
       appendAgentLog(ev.message || ev.phase || 'status');
       appendActionStream(ev.message || ev.phase || 'status');
+      appendActionStep(ev.message || ev.phase || 'status', { kind: 'step', done: true });
       if (ev.phase === 'snapshot') setStatusPhrase('Creating recovery snapshot…', true);
       else if (ev.phase === 'inspect') setStatusPhrase('Inspecting the workspace…', true);
       else if (ev.phase === 'plan') setStatusPhrase('Planning the changes…', true);
       else if (ev.phase === 'build') setStatusPhrase('Implementing changes…', true);
       else if (ev.phase === 'repair') setStatusPhrase('Repairing failed checks…', true);
       else if (ev.message) setStatusPhrase(ev.message, true);
+    } else if (ev.type === 'tool') {
+      const name = ev.tool || 'tool';
+      const label = ev.path ? `${name} · ${ev.path}` : name;
+      let row = toolRows.get(name + (ev.path || ''));
+      if (!row) {
+        row = appendActionStep(label, {
+          kind: 'tool',
+          detail: [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200),
+          done: ev.state === 'completed' || ev.state === 'done',
+        });
+        toolRows.set(name + (ev.path || ''), row);
+      } else if (ev.output || ev.state === 'completed') {
+        row.classList.add('done');
+        row.classList.remove('running');
+        const detail = row.querySelector('.action-step-detail');
+        const chunk = [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200);
+        if (detail && chunk) detail.textContent = chunk;
+        else if (chunk) {
+          const pre = document.createElement('pre');
+          pre.className = 'action-step-detail';
+          pre.textContent = chunk;
+          row.querySelector('.action-step-body')?.appendChild(pre);
+        }
+      }
+      appendActionStream(`$ ${label}${ev.state ? ' [' + ev.state + ']' : ''}`);
+      setStatusPhrase(`Running ${name}…`, true);
+      appendAgentLog(`tool ${name}`);
     } else if (ev.type === 'verification') {
       renderVerification(ev.verification, ev.repairRound);
       renderActionFiles(ev.verification);
       const ok = ev.verification?.successCriteria?.ok;
       appendAgentLog(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
       appendActionStream(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
+      appendActionStep(ok ? 'Verification passed' : `Verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`, {
+        kind: 'verify',
+        done: true,
+      });
       setStatusPhrase(ok ? 'Verification passed' : 'Checking what still needs work…', !ok);
     } else if (ev.type === 'part') {
       const role = ev.role || 'assistant';
@@ -929,19 +970,22 @@ function streamJob(jobId) {
         if (!agentBody) agentBody = addMessage('agent', '');
         agentRaw += part.text;
         agentBody.innerHTML = renderMarkdown(agentRaw);
-        const m = $('#messages');
-        m.scrollTop = m.scrollHeight;
-        // Mirror a short tail into the live stream panel
+        const mbox = $('#messages');
+        if (mbox) mbox.scrollTop = mbox.scrollHeight;
         const tail = part.text.trim();
-        if (tail) appendActionStream(tail.length > 280 ? tail.slice(0, 280) + '…' : tail);
-      } else if (part.type === 'tool') {
-        const label = part.tool || 'tool';
-        appendActionStep(label);
+        if (tail) appendActionStream(tail.length > 400 ? tail.slice(0, 400) + '…' : tail);
+      } else if (part.type === 'tool' || part.tool) {
+        const label = part.tool || part.name || 'tool';
+        appendActionStep(label, { kind: 'tool' });
         appendAgentLog(`tool ${label}`);
         appendActionStream(`$ ${label}`);
         setStatusPhrase(`Running ${label}…`, true);
       } else if (part.type === 'reasoning' && part.text) {
-        appendActionStream(part.text.slice(0, 400));
+        appendActionStream(part.text.slice(0, 500));
+        appendActionStep('Thinking…', { kind: 'step', detail: part.text.slice(0, 500) });
+      } else if (part.type && part.type !== 'text') {
+        appendActionStream(`${part.type}${part.path ? ' ' + part.path : ''}`);
+        appendActionStep(part.type + (part.path ? ` · ${part.path}` : ''), { kind: 'step' });
       }
     } else if (ev.type === 'done') {
       const ok = ev.status === 'completed';
@@ -949,8 +993,14 @@ function streamJob(jobId) {
       setStatusPhrase(ok ? 'Built' : `Stopped — ${ev.error || ev.status}`, false);
       const sum = $('#action-history-summary');
       if (sum) sum.textContent = ok ? 'Completed' : 'Failed';
-      // mark steps done
-      document.querySelectorAll('#action-steps li').forEach((li) => li.classList.add('done'));
+      document.querySelectorAll('#action-steps li').forEach((li) => {
+        li.classList.add('done');
+        li.classList.remove('running');
+      });
+      appendActionStep(ok ? 'Task completed' : `Task ${ev.status}${ev.error ? ': ' + ev.error : ''}`, {
+        kind: ok ? 'verify' : 'error',
+        done: true,
+      });
       addMessage('tool', ok ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
       setAgentStatus(ok ? 'Completed' : `Failed: ${ev.error || ev.status}`);
       appendAgentLog(ok ? 'done' : `failed: ${ev.error || ev.status}`);
@@ -972,6 +1022,7 @@ function streamJob(jobId) {
     setStatusPhrase('Stream disconnected — reconnect or resend', false);
     const sum = $('#action-history-summary');
     if (sum) sum.textContent = 'Disconnected';
+    appendActionStep('Stream disconnected', { kind: 'error', done: true });
     addMessage('tool', '⚠️ Stream disconnected');
     setAgentStatus('Stream disconnected');
     appendActionStream('stream disconnected');
