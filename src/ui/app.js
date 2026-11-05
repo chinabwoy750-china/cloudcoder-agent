@@ -162,6 +162,7 @@ function setShell(name) {
   if (bottomNav) bottomNav.classList.toggle('hidden', name === 'workspace');
   document.body.classList.toggle('shell-workspace-active', name === 'workspace');
   document.body.classList.toggle('shell-home-active', name === 'home');
+  document.body.classList.toggle('shell-projects-active', name === 'projects');
   document.querySelectorAll('.bottom-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.shell === name);
   });

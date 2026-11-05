@@ -1434,3 +1434,222 @@ body.shell-workspace-active .app { padding-bottom: 0; }
 /* Empty state less dominant in project */
 #empty-state { padding: 32px 16px; }
 #suggestions.hidden { display: none !important; }
+
+
+/* ============================================================
+   DESKTOP / WIDE LAYOUT FIX
+   Home & Projects must span full viewport (not sidebar grid hole)
+   ============================================================ */
+body.shell-home-active .app,
+body.shell-projects-active .app {
+  display: block !important;
+  height: 100%;
+  height: 100dvh;
+  overflow: auto;
+  padding-bottom: 0;
+}
+body.shell-home-active #shell-home,
+body.shell-projects-active #shell-projects {
+  width: 100%;
+  min-height: 100dvh;
+  grid-column: 1 / -1;
+}
+
+/* Full-bleed centered home */
+body.shell-home-active .shell-home {
+  min-height: 100dvh;
+}
+body.shell-home-active .home-top {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 20px 32px;
+}
+body.shell-home-active .home-center {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 120px;
+  align-items: center;
+  text-align: center;
+}
+body.shell-home-active .home-greeting {
+  font-size: clamp(2.4rem, 4.5vw, 3.4rem);
+  line-height: 1.1;
+  margin-bottom: 8px;
+}
+body.shell-home-active .home-composer {
+  width: 100%;
+  max-width: 640px;
+  border-radius: 28px;
+  padding: 18px 18px 12px;
+}
+body.shell-home-active .home-composer textarea {
+  font-size: 16px;
+  min-height: 64px;
+}
+body.shell-home-active .bottom-nav {
+  /* floating dock stays centered */
+}
+
+/* Projects desktop */
+body.shell-projects-active .shell-projects {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 28px 120px;
+  width: 100%;
+  box-sizing: border-box;
+}
+body.shell-projects-active .projects-top h1 {
+  font-size: 2.25rem;
+}
+body.shell-projects-active .project-card {
+  padding: 14px 12px;
+}
+body.shell-projects-active .project-thumb {
+  width: 64px;
+  height: 64px;
+}
+
+/* Workspace desktop: classic 3-pane studio */
+body.shell-workspace-active .app {
+  display: grid !important;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  grid-template-rows: 1fr;
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+body.shell-workspace-active #shell-workspace {
+  display: contents; /* children participate in app grid */
+}
+body.shell-workspace-active .sidebar {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  height: 100%;
+  overflow: auto;
+}
+body.shell-workspace-active .main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body.shell-workspace-active .inspector {
+  display: flex;
+  flex-direction: column;
+  grid-column: 3;
+  grid-row: 1;
+  height: 100%;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--bg-2);
+}
+body.shell-workspace-active .topbar {
+  display: flex;
+}
+body.shell-workspace-active .messages {
+  padding: 20px 28px;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+body.shell-workspace-active #view-chat .composer-wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  width: 100%;
+}
+body.shell-workspace-active .msg.user .bubble {
+  max-width: min(70%, 560px);
+}
+body.shell-workspace-active .msg.agent .bubble {
+  max-width: min(85%, 720px);
+}
+
+/* Desktop bottom nav: refined pill */
+@media (min-width: 901px) {
+  .bottom-nav {
+    bottom: 24px;
+    padding: 8px;
+    gap: 8px;
+  }
+  .bottom-nav-btn {
+    min-width: 96px;
+    padding: 12px 22px;
+    font-size: 11px;
+    flex-direction: row;
+    gap: 8px;
+  }
+  .bottom-nav-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  /* Hide mobile drawer chrome */
+  body.shell-workspace-active .mobile-only {
+    display: none !important;
+  }
+}
+
+/* Mid tablets */
+@media (min-width: 701px) and (max-width: 1100px) {
+  body.shell-workspace-active .app {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  body.shell-workspace-active .inspector {
+    display: none; /* open via button if needed */
+  }
+}
+
+/* Mobile overrides after desktop workspace grid */
+@media (max-width: 900px) {
+  body.shell-workspace-active .app {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto 1fr !important;
+    height: 100dvh;
+  }
+  body.shell-workspace-active #shell-workspace {
+    display: contents;
+  }
+  body.shell-workspace-active .sidebar {
+    position: fixed;
+    z-index: 50;
+    transform: translateX(-105%);
+    width: min(300px, 88vw);
+    height: 100%;
+  }
+  body.shell-workspace-active .sidebar.open {
+    transform: translateX(0);
+  }
+  body.shell-workspace-active .main {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+  body.shell-workspace-active .inspector {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(320px, 90vw);
+    z-index: 50;
+    transform: translateX(105%);
+  }
+  body.shell-workspace-active .inspector.open {
+    transform: translateX(0);
+  }
+  body.shell-workspace-active .topbar {
+    display: flex !important;
+  }
+  body.shell-workspace-active .mobile-only {
+    display: inline-flex !important;
+  }
+  body.shell-home-active .home-center {
+    max-width: 100%;
+    padding: 24px 16px 100px;
+  }
+  body.shell-home-active .home-greeting {
+    font-size: clamp(1.7rem, 7vw, 2.2rem);
+  }
+}
