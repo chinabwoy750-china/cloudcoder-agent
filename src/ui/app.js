@@ -1431,7 +1431,7 @@ $('#preview-build')?.addEventListener('click', async () => {
   const status = $('#preview-status'); if (status) status.textContent = 'Running build…';
   try {
     const result = await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/build-repair`, { method: 'POST', body: '{}' });
-    if (!result.supported) throw new Error(result.reason || 'Build is not supported for this project');
+    if (!result.supported) { toast(result.reason || 'No build step for this project — open Preview instead', 'ok'); return; }
     if (!result.ok) throw new Error((result.results || []).map((r) => r.stderr || r.stdout || `Exit code ${r.code}`).join('\n').slice(0, 700) || 'Build failed');
     toast('Build completed. Loading preview…', 'ok');
     await refreshPreview(true);
