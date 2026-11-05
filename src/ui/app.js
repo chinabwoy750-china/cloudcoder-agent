@@ -877,6 +877,28 @@ function addMessage(role, text, { html = false, skipSave = false } = {}) {
   else if (role === 'agent') bubble.innerHTML = renderMarkdown(text);
   else bubble.textContent = text;
   wrap.appendChild(bubble);
+  if (role === 'user' || role === 'agent') {
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'msg-copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.title = 'Copy message';
+    copyBtn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const plain = bubble.innerText || bubble.textContent || '';
+      try {
+        await navigator.clipboard.writeText(plain);
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+      } catch {
+        toast('Could not copy', 'err');
+      }
+    });
+    actions.appendChild(copyBtn);
+    wrap.appendChild(actions);
+  }
   $('#messages').appendChild(wrap);
   const mbox = $('#messages');
   if (mbox) mbox.scrollTop = mbox.scrollHeight;
@@ -1004,6 +1026,9 @@ function streamJob(jobId) {
       else if (ev.phase === 'build') setStatusPhrase('Implementing changes…', true);
       else if (ev.phase === 'repair') setStatusPhrase('Repairing failed checks…', true);
       else if (ev.message) setStatusPhrase(ev.message, true);
+      if (ev.phase === 'inventory' && Array.isArray(ev.sample)) {
+        for (const p of ev.sample) appendActionStep(String(p), { kind: 'file', done: true });
+      }
     } else if (ev.type === 'tool') {
       const name = ev.tool || 'tool';
       const label = ev.path ? `${name} · ${ev.path}` : name;
@@ -1034,6 +1059,9 @@ function streamJob(jobId) {
     } else if (ev.type === 'verification') {
       renderVerification(ev.verification, ev.repairRound);
       renderActionFiles(ev.verification);
+      if (ev.verification?.diff?.totalTouched === 0 && (ev.verification?.mode || 'build') !== 'plan') {
+        toast('No files were changed in the workspace', 'err');
+      }
       const ok = ev.verification?.successCriteria?.ok;
       appendAgentLog(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
       appendActionStream(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
@@ -1092,8 +1120,10 @@ function streamJob(jobId) {
       updateComposerState();
       if (state.workspaceId) {
         refreshFiles().catch(() => {});
+        refreshWorkspaces().catch(() => {});
         if (state.previewOpen) refreshPreview(false);
       }
+      if (!ok) toast(ev.error || 'Task did not complete successfully', 'err');
     }
   };
 

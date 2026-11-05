@@ -62,7 +62,7 @@ export function buildRepairPrompt(verification) {
 }
 
 async function promptSession({ sessionId, directory, text, model }) {
-  const body = { parts: [{ type: 'text', text }] };
+  const body = { parts: [{ type: 'text', text }], directory };
   const m = splitModel(model || config.agent.defaultModel);
   if (m) body.model = m;
   await oc('POST', `/session/${sessionId}/prompt_async`, {
@@ -160,7 +160,7 @@ export async function runAgentTask({
   await ensureOpenCodeReady(45000);
   const session = await oc('POST', '/session', {
     query: { directory },
-    body: { title: prompt.slice(0, 80) },
+    body: { title: prompt.slice(0, 80), directory },
     timeoutMs: 20000,
   });
   const sessionId = session.id;
@@ -169,7 +169,15 @@ export async function runAgentTask({
 
   const planOn = String(process.env.PLAN_THEN_ACT || 'true').toLowerCase() !== 'false';
   const safeMode = mode === 'plan' ? 'plan' : 'build';
-  const finalPrompt = buildTaskPrompt(prompt, safeMode, planOn);
+  const pathHint = [
+    '',
+    `WORKSPACE ROOT (absolute): ${directory}`,
+    'All created/edited files MUST be written under this directory only.',
+    'Do not write to /tmp outside this folder, and do not claim files exist unless tools wrote them here.',
+    'Prefer creating real project files (e.g. index.html, styles.css, package.json) in the workspace root.',
+    '',
+  ].join('\n');
+  const finalPrompt = buildTaskPrompt(prompt, safeMode, planOn) + pathHint;
 
   const m = splitModel(model || config.agent.defaultModel);
   logger.info(`Agent task mode=${safeMode} model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} planThenAct=${planOn}`);
@@ -197,6 +205,33 @@ export async function runAgentTask({
     mode: safeMode,
   });
   onEvent({ type: 'verification', verification });
+  try {
+    const { listFiles } = await import('../workspace/files.js');
+    // directory is absolute; derive id from basename for listFiles API
+    const wsId = directory.split(/[/\\]/).filter(Boolean).pop();
+    const listed = await listFiles(wsId, { max: 500 }).catch(() => []);
+    const fileOnly = (listed || []).filter((f) => f.type === 'file');
+    onEvent({
+      type: 'status',
+      phase: 'inventory',
+      message: `Workspace now has ${fileOnly.length} file(s)`,
+      fileCount: fileOnly.length,
+      sample: fileOnly.slice(0, 15).map((f) => f.path),
+    });
+    if (safeMode === 'build' && fileOnly.length === 0) {
+      onEvent({
+        type: 'status',
+        phase: 'error',
+        message: 'No files were written to the workspace. The agent reply alone does not mean the site exists yet.',
+      });
+      if (verification?.successCriteria) {
+        verification.successCriteria.ok = false;
+        verification.successCriteria.reason = 'No files present in workspace after build';
+      }
+    }
+  } catch (invErr) {
+    logger.warn(`[agent] inventory failed: ${invErr.message}`);
+  }
 
   // Bounded auto-repair when build verification fails and files may be partial.
   if (

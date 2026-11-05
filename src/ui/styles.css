@@ -1653,3 +1653,49 @@ body.shell-workspace-active .msg.agent .bubble {
     font-size: clamp(1.7rem, 7vw, 2.2rem);
   }
 }
+
+/* Message copy controls */
+.msg {
+  position: relative;
+}
+.msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0.65;
+}
+.msg.user .msg-actions { justify-content: flex-end; }
+.msg-copy-btn {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #c5cbe0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.msg-copy-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+/* Desktop: allow full scroll through chat + action history */
+body.shell-workspace-active .messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+body.shell-workspace-active .action-history {
+  position: relative !important; /* was sticky — blocked scrolling to top */
+  top: auto !important;
+  max-height: none;
+}
+body.shell-workspace-active .action-stream {
+  max-height: 220px;
+}
+body.shell-workspace-active #view-chat {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body.shell-workspace-active #view-chat .composer-wrap {
+  flex-shrink: 0;
+}
