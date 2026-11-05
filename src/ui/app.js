@@ -1428,10 +1428,15 @@ $('#preview-reload')?.addEventListener('click', () => refreshPreview(true));
 $('#preview-build')?.addEventListener('click', async () => {
   if (!state.workspaceId) return toast('Create a project first', 'err');
   const btn = $('#preview-build'); btn.disabled = true; btn.textContent = 'Building…';
-  const status = $('#preview-status'); if (status) status.textContent = 'Running build…';
+  const status = $('#preview-status'); if (status) status.textContent = 'Preparing preview…';
   try {
     const result = await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/build-repair`, { method: 'POST', body: '{}' });
-    if (!result.supported) { toast(result.reason || 'No build step for this project — open Preview instead', 'ok'); return; }
+    if (!result.supported) {
+      // Static HTML sites need no compile step — open preview directly.
+      toast('Static project — loading preview', 'ok');
+      await refreshPreview(true);
+      return;
+    }
     if (!result.ok) throw new Error((result.results || []).map((r) => r.stderr || r.stdout || `Exit code ${r.code}`).join('\n').slice(0, 700) || 'Build failed');
     toast('Build completed. Loading preview…', 'ok');
     await refreshPreview(true);
