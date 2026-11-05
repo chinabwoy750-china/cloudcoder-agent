@@ -1363,3 +1363,74 @@ input:focus, textarea:focus, select:focus {
   top: 0;
   z-index: 2;
 }
+
+/* Hide bottom nav while editing a project */
+body.shell-workspace-active .bottom-nav { display: none !important; }
+body.shell-home-active .workspace-only { display: none !important; }
+body.shell-workspace-active .app { padding-bottom: 0; }
+
+/* Modern workspace composer */
+#view-chat .composer-wrap {
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, transparent, rgba(7,8,12,0.92) 28%);
+}
+#view-chat .composer {
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(22, 24, 32, 0.96);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  padding: 10px 12px 8px;
+}
+#view-chat .composer-inner textarea {
+  min-height: 44px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+#view-chat .composer-bar {
+  margin-top: 4px;
+}
+.composer-cancel-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(251, 113, 133, 0.15);
+  color: #fb7185;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.composer-cancel-btn.hidden { display: none !important; }
+.composer-cancel-btn:hover { background: rgba(251, 113, 133, 0.28); }
+
+/* Chat bubbles modern */
+.msg { margin: 8px 12px; }
+.msg.user { display: flex; justify-content: flex-end; }
+.msg.user .bubble {
+  max-width: min(92%, 520px);
+  background: linear-gradient(135deg, rgba(124,158,255,0.25), rgba(167,139,250,0.22));
+  border: 1px solid rgba(167,139,250,0.25);
+  border-radius: 18px 18px 6px 18px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.msg.agent .bubble {
+  max-width: min(96%, 640px);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px 18px 18px 6px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.msg.tool .bubble {
+  max-width: 100%;
+  background: transparent;
+  border: 0;
+  color: #9aa3b5;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+/* Empty state less dominant in project */
+#empty-state { padding: 32px 16px; }
+#suggestions.hidden { display: none !important; }

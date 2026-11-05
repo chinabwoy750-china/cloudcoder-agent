@@ -89,20 +89,93 @@ function toast(message, kind = '') {
 
 
 /* ---------------- Shell navigation (Home / Projects / Workspace) ---------------- */
+
+/* ---------------- Per-project chat history (browser) ---------------- */
+function chatStorageKey(workspaceId) {
+  return `um_chat_${workspaceId}`;
+}
+
+function clearMessagesUI() {
+  const box = $('#messages');
+  if (!box) return;
+  // keep action-history + empty-state nodes
+  [...box.children].forEach((child) => {
+    if (child.id === 'action-history' || child.id === 'empty-state') return;
+    child.remove();
+  });
+}
+
+function saveChatHistory() {
+  if (!state.workspaceId) return;
+  const box = $('#messages');
+  if (!box) return;
+  const items = [];
+  box.querySelectorAll('.msg').forEach((el) => {
+    const role = el.classList.contains('user') ? 'user' : el.classList.contains('agent') ? 'agent' : 'tool';
+    const bubble = el.querySelector('.bubble');
+    if (!bubble) return;
+    items.push({ role, html: bubble.innerHTML, text: bubble.textContent || '' });
+  });
+  try {
+    localStorage.setItem(chatStorageKey(state.workspaceId), JSON.stringify(items.slice(-80)));
+  } catch { /* quota */ }
+  updateEmptyStateVisibility();
+}
+
+function loadChatHistory(workspaceId) {
+  clearMessagesUI();
+  let items = [];
+  try {
+    items = JSON.parse(localStorage.getItem(chatStorageKey(workspaceId)) || '[]');
+  } catch { items = []; }
+  if (!Array.isArray(items)) items = [];
+  for (const item of items) {
+    const role = item.role === 'user' || item.role === 'agent' || item.role === 'tool' ? item.role : 'agent';
+    if (item.html) addMessage(role, item.html, { html: true, skipSave: true });
+    else if (item.text) addMessage(role, item.text, { skipSave: true });
+  }
+  updateEmptyStateVisibility();
+}
+
+function updateEmptyStateVisibility() {
+  const empty = $('#empty-state');
+  const box = $('#messages');
+  if (!empty || !box) return;
+  const hasMsgs = box.querySelectorAll('.msg').length > 0;
+  empty.classList.toggle('hidden', hasMsgs);
+  const suggestions = $('#suggestions');
+  // Never show generic starter chips once a project has conversation history
+  if (suggestions) suggestions.classList.toggle('hidden', hasMsgs || !state.workspaceId);
+}
+
+
 function setShell(name) {
   state.shell = name;
   const home = $('#shell-home');
   const projects = $('#shell-projects');
   const workspace = $('#shell-workspace');
+  const bottomNav = $('#bottom-nav');
   home?.classList.toggle('hidden', name !== 'home');
   projects?.classList.toggle('hidden', name !== 'projects');
   workspace?.classList.toggle('hidden', name !== 'workspace');
+  // Hide Home/Projects dock while editing a project
+  if (bottomNav) bottomNav.classList.toggle('hidden', name === 'workspace');
+  document.body.classList.toggle('shell-workspace-active', name === 'workspace');
+  document.body.classList.toggle('shell-home-active', name === 'home');
   document.querySelectorAll('.bottom-nav-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.shell === name || (name === 'workspace' && btn.dataset.shell === 'projects'));
+    btn.classList.toggle('active', btn.dataset.shell === name);
   });
-  // Bottom nav stays visible; when in workspace, highlight projects as context
+  // Preview / inspector only belong to workspace shell
+  document.querySelectorAll('.workspace-only').forEach((el) => {
+    el.classList.toggle('hidden', name !== 'workspace');
+  });
   if (name === 'home') {
     closeDrawers();
+    // ensure preview closed on home
+    if (state.previewOpen) {
+      state.previewOpen = false;
+      $('#preview-view')?.classList.add('hidden');
+    }
   }
   if (name === 'projects') {
     closeDrawers();
@@ -537,8 +610,17 @@ function updateComposerState() {
     emptyTitle.textContent = 'What would you like to change?';
     emptyCopy.textContent = 'Ask Universal Modder to build, redesign, debug or improve this project.';
   }
-  if (suggestions) suggestions.classList.toggle('disabled', !hasWs);
+  if (suggestions) {
+    const hasMsgs = Boolean($('#messages')?.querySelectorAll('.msg')?.length);
+    suggestions.classList.toggle('hidden', hasMsgs || !hasWs);
+    suggestions.classList.toggle('disabled', !hasWs);
+  }
+  updateEmptyStateVisibility();
+  // Compact stop control while busy
+  const cancel = $('#cancel-btn');
+  if (cancel) cancel.classList.toggle('hidden', !busy);
 }
+
 
 /* ---------------- Workspaces ---------------- */
 
@@ -590,6 +672,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 
 async function selectWorkspace(id) {
   setShell('workspace');
+  loadChatHistory(id);
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);
@@ -782,27 +865,23 @@ function hideEmptyState() {
   if (es) es.classList.add('hidden');
 }
 
-function addMessage(role, text, { html = false } = {}) {
-  hideEmptyState();
+function addMessage(role, text, { html = false, skipSave = false } = {}) {
+  const empty = $('#empty-state');
+  if (empty) empty.classList.add('hidden');
   const wrap = document.createElement('div');
   wrap.className = `msg ${role}`;
-
-  const avatar = document.createElement('div');
-  avatar.className = 'msg-avatar';
-  avatar.setAttribute('aria-hidden', 'true');
-  avatar.textContent = role === 'user' ? 'Y' : role === 'tool' ? '↳' : '✦';
-
-  const content = document.createElement('div');
-  content.className = 'msg-content';
-  if (html) content.innerHTML = renderMarkdown(text);
-  else content.textContent = text;
-
-  wrap.append(avatar, content);
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  if (html) bubble.innerHTML = text;
+  else if (role === 'agent') bubble.innerHTML = renderMarkdown(text);
+  else bubble.textContent = text;
+  wrap.appendChild(bubble);
   $('#messages').appendChild(wrap);
-
-  const m = $('#messages');
-  m.scrollTop = m.scrollHeight;
-  return content;
+  const mbox = $('#messages');
+  if (mbox) mbox.scrollTop = mbox.scrollHeight;
+  if (!skipSave) saveChatHistory();
+  updateEmptyStateVisibility();
+  return bubble;
 }
 
 // Copy-code delegation
@@ -852,7 +931,7 @@ $('#composer').addEventListener('submit', async (e) => {
   $('#prompt').value = '';
   autoGrow();
   state.jobId = 'pending';
-  $('#cancel-btn').classList.remove('hidden');
+  /* cancel visibility via updateComposerState */
   updateComposerState();
 
   try {
@@ -873,7 +952,7 @@ $('#composer').addEventListener('submit', async (e) => {
   } catch (err) {
     addMessage('tool', `Error: ${err.message}`);
     state.jobId = null;
-    $('#cancel-btn').classList.add('hidden');
+    /* cancel visibility via updateComposerState */
     updateComposerState();
   }
 });
@@ -1008,7 +1087,7 @@ function streamJob(jobId) {
       es.close();
       state.stream = null;
       state.jobId = null;
-      $('#cancel-btn')?.classList.add('hidden');
+      /* cancel visibility via updateComposerState */
       updateComposerState();
       if (state.workspaceId) {
         refreshFiles().catch(() => {});
@@ -1029,7 +1108,7 @@ function streamJob(jobId) {
     es.close();
     state.stream = null;
     state.jobId = null;
-    $('#cancel-btn')?.classList.add('hidden');
+    /* cancel visibility via updateComposerState */
     updateComposerState();
   };
 }
