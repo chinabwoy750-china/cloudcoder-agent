@@ -4,7 +4,8 @@ import { config } from '../config/env.js';
 import { resolveWorkspace, resolveInside } from './manager.js';
 import { logger } from '../utils/logger.js';
 
-const DENY_NAMES = new Set(['.env', '.env.local', '.env.production', 'id_rsa', 'id_ed25519', '.npmrc', '.netrc']);
+const DENY_NAMES = new Set([
+  '.universal-modder-chat.json','.env', '.env.local', '.env.production', 'id_rsa', 'id_ed25519', '.npmrc', '.netrc']);
 const DENY_PATTERNS = [
   /^\.git\//,
   /(^|\/)\.ssh\//,

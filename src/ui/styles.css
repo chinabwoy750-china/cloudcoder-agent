@@ -1912,3 +1912,41 @@ body.shell-workspace-active #view-chat .composer-wrap {
 .msg.is-selected .bubble {
   outline: 1px solid rgba(167,139,250,0.35);
 }
+
+/* Mobile clarity: avoid backdrop-filter blur washing the UI */
+@media (max-width: 900px) {
+  .sidebar,
+  .inspector,
+  .scrim,
+  .modal-backdrop,
+  .home-composer,
+  .bottom-nav,
+  .login-card,
+  .agent-live {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .scrim {
+    background: rgba(2, 4, 10, 0.55) !important;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Prevent transform-induced blurriness on open drawers */
+  .sidebar,
+  .inspector {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  .sidebar:not(.open) {
+    transform: translateX(-105%);
+  }
+  .inspector:not(.open) {
+    transform: translateX(105%);
+  }
+  .sidebar.open,
+  .inspector.open {
+    transform: translateX(0);
+  }
+}

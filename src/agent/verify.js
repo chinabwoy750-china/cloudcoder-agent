@@ -16,6 +16,7 @@ export async function snapshotWorkspaceFingerprint(directory, { maxFiles = 400 }
     for (const e of entries) {
       if (files.length >= maxFiles) break;
       if (e.name === 'node_modules' || e.name === '.git' || e.name === '.cloudcoder' || e.name === 'dist' || e.name === 'build') continue;
+      if (e.name.startsWith('.universal-modder')) continue;
       const nextRel = rel ? `${rel}/${e.name}` : e.name;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) await walk(full, nextRel);

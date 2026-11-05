@@ -90,7 +90,7 @@ function toast(message, kind = '') {
 
 /* ---------------- Shell navigation (Home / Projects / Workspace) ---------------- */
 
-/* ---------------- Per-project chat history (browser) ---------------- */
+/* ---------------- Per-project chat history (server + local cache) ---------------- */
 function chatStorageKey(workspaceId) {
   return `um_chat_${workspaceId}`;
 }
@@ -98,41 +98,79 @@ function chatStorageKey(workspaceId) {
 function clearMessagesUI() {
   const box = $('#messages');
   if (!box) return;
-  // keep action-history + empty-state nodes
   [...box.children].forEach((child) => {
-    if (child.id === 'action-history' || child.id === 'empty-state') return;
+    if (child.id === 'agent-live' || child.id === 'action-history' || child.id === 'empty-state') return;
     child.remove();
   });
 }
 
-function saveChatHistory() {
-  if (!state.workspaceId) return;
+function collectMessagesFromUI() {
   const box = $('#messages');
-  if (!box) return;
+  if (!box) return [];
   const items = [];
   box.querySelectorAll('.msg').forEach((el) => {
     const role = el.classList.contains('user') ? 'user' : el.classList.contains('agent') ? 'agent' : 'tool';
     const bubble = el.querySelector('.bubble');
     if (!bubble) return;
-    items.push({ role, html: bubble.innerHTML, text: bubble.textContent || '' });
+    items.push({
+      role,
+      html: bubble.innerHTML,
+      text: bubble.innerText || bubble.textContent || '',
+      at: new Date().toISOString(),
+    });
   });
-  try {
-    localStorage.setItem(chatStorageKey(state.workspaceId), JSON.stringify(items.slice(-80)));
-  } catch { /* quota */ }
-  updateEmptyStateVisibility();
+  return items.slice(-100);
 }
 
-function loadChatHistory(workspaceId) {
+let chatSaveTimer = null;
+function saveChatHistory() {
+  if (!state.workspaceId) return;
+  const items = collectMessagesFromUI();
+  try {
+    localStorage.setItem(chatStorageKey(state.workspaceId), JSON.stringify(items));
+  } catch { /* quota */ }
+  updateEmptyStateVisibility();
+  // Debounced server persist so mobile/desktop share the same thread
+  if (chatSaveTimer) clearTimeout(chatSaveTimer);
+  chatSaveTimer = setTimeout(async () => {
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/chat`, {
+        method: 'PUT',
+        body: JSON.stringify({ messages: items }),
+      });
+    } catch {
+      // offline / ephemeral — local cache still works on this device
+    }
+  }, 400);
+}
+
+async function loadChatHistory(workspaceId) {
   clearMessagesUI();
   let items = [];
+  // Prefer server history (cross-device)
   try {
-    items = JSON.parse(localStorage.getItem(chatStorageKey(workspaceId)) || '[]');
-  } catch { items = []; }
+    const res = await api(`/api/workspaces/${encodeURIComponent(workspaceId)}/chat`);
+    if (Array.isArray(res?.messages) && res.messages.length) items = res.messages;
+  } catch { /* fall back */ }
+  if (!items.length) {
+    try {
+      items = JSON.parse(localStorage.getItem(chatStorageKey(workspaceId)) || '[]');
+    } catch { items = []; }
+  }
   if (!Array.isArray(items)) items = [];
   for (const item of items) {
     const role = item.role === 'user' || item.role === 'agent' || item.role === 'tool' ? item.role : 'agent';
     if (item.html) addMessage(role, item.html, { html: true, skipSave: true });
     else if (item.text) addMessage(role, item.text, { skipSave: true });
+  }
+  // Seed server from local cache when server empty but local has data
+  if (items.length) {
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(workspaceId)}/chat`, {
+        method: 'PUT',
+        body: JSON.stringify({ messages: items }),
+      });
+    } catch { /* ignore */ }
   }
   updateEmptyStateVisibility();
 }
@@ -685,7 +723,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 
 async function selectWorkspace(id) {
   setShell('workspace');
-  loadChatHistory(id);
+  await loadChatHistory(id);
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);

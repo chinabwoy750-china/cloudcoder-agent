@@ -13,6 +13,7 @@ import { detectProjectType } from '../../git/detect.js';
 import { rateLimitMiddleware } from '../../utils/ratelimit.js';
 import { logger } from '../../utils/logger.js';
 import { createWorkspaceSnapshot, listWorkspaceSnapshots, restoreWorkspaceSnapshot } from '../../workspace/snapshots.js';
+import { readWorkspaceChat, writeWorkspaceChat } from '../../workspace/chat.js';
 import { assertWorkspaceOwner } from '../../db/workspaces.js';
 import { signPreviewToken, verifyPreviewToken } from '../../auth/preview-token.js';
 
@@ -185,6 +186,20 @@ export function filesRouter() {
     });
   }));
 
+
+
+  // Cross-device chat history for a workspace (stored inside the workspace folder)
+  router.get('/workspaces/:id/chat', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
+    const messages = await readWorkspaceChat(req.params.id);
+    res.json({ messages });
+  }));
+
+  router.put('/workspaces/:id/chat', asyncH(async (req, res) => {
+    await requireWorkspaceAccess(req);
+    const messages = await writeWorkspaceChat(req.params.id, req.body?.messages || []);
+    res.json({ ok: true, messages });
+  }));
 
   // Workspace snapshots provide an explicit recovery point before risky AI edits.
   router.get('/workspaces/:id/snapshots', asyncH(async (req, res) => {
