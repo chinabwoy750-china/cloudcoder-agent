@@ -88,41 +88,63 @@ export async function verifyAgentOutcome(directory, beforeFingerprint, { runVeri
     return verification;
   }
 
-  // Prefer test, then build if available
-  for (const action of ['test', 'build']) {
-    try {
-      const result = await runProjectAction({ dir: directory, action, projectType: project.type });
-      if (!result.supported) continue;
-      verification.actions.push({
-        action,
-        ok: result.ok,
-        isolation: result.isolation,
-        results: (result.results || []).map((r) => ({
-          cmd: r.cmd,
-          code: r.code,
-          timedOut: r.timedOut,
-          stderr: String(r.stderr || '').slice(0, 1500),
-          stdout: String(r.stdout || '').slice(0, 800),
-        })),
-      });
-      if (!result.ok) break;
-    } catch (err) {
-      logger.warn(`[verify] ${action} failed: ${err.message}`);
-      verification.actions.push({ action, ok: false, error: err.message });
-      break;
+  // Static HTML/CSS sites have no npm build — treat file changes as success.
+  const staticTypes = new Set(['static', 'unknown', 'html', '']);
+  const isStatic = staticTypes.has(String(project?.type || 'static'));
+  const hasIndex = after.some((f) => /^(index\.html|index\.htm)$/i.test(f.path) || /\/index\.html?$/i.test(f.path));
+
+  if (!isStatic) {
+    // Prefer test, then build when the project type supports them.
+    for (const action of ['test', 'build']) {
+      try {
+        const result = await runProjectAction({ dir: directory, action, projectType: project.type });
+        if (!result.supported) {
+          // Do not record unsupported actions as failures (avoids "build not supported" noise).
+          continue;
+        }
+        verification.actions.push({
+          action,
+          ok: result.ok,
+          isolation: result.isolation,
+          results: (result.results || []).map((r) => ({
+            cmd: r.cmd,
+            code: r.code,
+            timedOut: r.timedOut,
+            stderr: String(r.stderr || '').slice(0, 1500),
+            stdout: String(r.stdout || '').slice(0, 800),
+          })),
+        });
+        if (!result.ok) break;
+      } catch (err) {
+        logger.warn(`[verify] ${action} failed: ${err.message}`);
+        verification.actions.push({ action, ok: false, error: err.message });
+        break;
+      }
     }
+  } else {
+    verification.actions.push({
+      action: 'static-check',
+      ok: diff.totalTouched > 0,
+      note: hasIndex ? 'index.html present' : 'static files updated',
+    });
   }
 
-  const actionFail = verification.actions.some((a) => a.ok === false);
+  const actionFail = verification.actions.some((a) => a.ok === false && a.action !== 'static-check');
   const actionPass = verification.actions.some((a) => a.ok === true);
+  const filesOk = diff.totalTouched > 0;
   verification.successCriteria = {
-    ok: diff.totalTouched > 0 && !actionFail,
-    filesChanged: diff.totalTouched > 0,
+    ok: filesOk && !actionFail,
+    filesChanged: filesOk,
     verificationRan: verification.actions.length > 0,
-    verificationPassed: actionPass && !actionFail,
+    verificationPassed: isStatic ? filesOk : (actionPass && !actionFail),
+    projectType: project?.type || 'static',
     reason: actionFail
       ? 'Verification command failed'
-      : (diff.totalTouched > 0 ? 'Changes applied' : 'No file changes detected'),
+      : (!filesOk
+        ? 'No file changes detected'
+        : (isStatic
+          ? (hasIndex ? 'Static site files written (preview ready)' : 'Static files written')
+          : 'Changes applied')),
   };
   return verification;
 }

@@ -239,22 +239,20 @@
     <!-- CHAT -->
     <section id="view-chat" class="view">
       <div id="messages" class="messages" aria-live="polite">
-        <div id="action-history" class="action-history hidden" aria-live="polite">
-          <button type="button" class="action-history-toggle" id="action-history-toggle" aria-expanded="true">
-            <span class="action-history-icon">◷</span>
-            <span class="action-history-title">Action history</span>
-            <span id="action-history-summary" class="action-history-summary muted small"></span>
-            <span class="action-history-chev" aria-hidden="true">▾</span>
-          </button>
-          <div id="action-history-body" class="action-history-body">
-            <div id="action-status-phrase" class="action-status-phrase" role="status"></div>
-            <ul id="action-steps" class="action-steps"></ul>
-            <pre id="action-stream" class="action-stream" aria-label="Live agent stream"></pre>
-            <div id="action-files" class="action-files hidden">
-              <div class="action-files-head">Files touched</div>
-              <ul id="action-files-list"></ul>
+        <div id="agent-live" class="agent-live hidden" aria-live="polite">
+          <header class="agent-live-head">
+            <div class="agent-live-signal" aria-hidden="true">
+              <span class="agent-live-ring"></span>
+              <span class="agent-live-dot"></span>
             </div>
-          </div>
+            <div class="agent-live-heading">
+              <strong>Agent activity</strong>
+              <span id="agent-live-status" class="agent-live-status">Waiting…</span>
+            </div>
+            <span id="agent-live-badge" class="agent-live-badge">LIVE</span>
+          </header>
+          <div id="agent-live-track" class="agent-live-track"></div>
+          <div id="agent-live-files" class="agent-live-files hidden"></div>
         </div>
         <div class="empty-state" id="empty-state">
           <div class="empty-icon">

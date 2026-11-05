@@ -430,48 +430,51 @@ document.querySelectorAll('.settings-tab').forEach((btn) => {
   });
 });
 
-$('#action-history-toggle')?.addEventListener('click', () => {
-  const el = $('#action-history');
-  if (!el) return;
-  el.classList.toggle('collapsed');
-  const open = !el.classList.contains('collapsed');
-  $('#action-history-toggle')?.setAttribute('aria-expanded', open ? 'true' : 'false');
-});
 
+
+/* ---------------- Modern agent live timeline ---------------- */
 const STATUS_PHRASES = [
+  'Reading your request…',
   'Inspecting the workspace…',
-  'Reading project structure…',
-  'Planning the changes…',
-  'Preparing file edits…',
-  'Writing project files…',
-  'Verifying the build…',
-  'Polishing the result…',
+  'Planning the approach…',
+  'Editing project files…',
+  'Checking the result…',
 ];
 let phraseTimer = null;
 let phraseIdx = 0;
 
-function showActionHistory() {
-  const el = $('#action-history');
+function showAgentLive() {
+  const el = $('#agent-live');
   if (!el) return;
-  el.classList.remove('hidden', 'collapsed');
-  $('#action-history-toggle')?.setAttribute('aria-expanded', 'true');
+  el.classList.remove('hidden');
+  el.classList.add('is-active');
 }
 
-function setStatusPhrase(text, pulsing = true) {
-  const el = $('#action-status-phrase');
+function hideAgentLiveIdle() {
+  const el = $('#agent-live');
   if (!el) return;
-  el.textContent = text || '';
-  el.classList.toggle('pulse', Boolean(pulsing && text));
+  el.classList.remove('is-active');
+}
+
+function setLiveStatus(text, { live = true } = {}) {
+  const st = $('#agent-live-status');
+  const badge = $('#agent-live-badge');
+  if (st) st.textContent = text || '';
+  if (badge) {
+    badge.textContent = live ? 'LIVE' : 'DONE';
+    badge.classList.toggle('is-done', !live);
+    badge.classList.toggle('is-live', live);
+  }
 }
 
 function startStatusPhrases() {
   stopStatusPhrases();
   phraseIdx = 0;
-  setStatusPhrase(STATUS_PHRASES[0], true);
+  setLiveStatus(STATUS_PHRASES[0], { live: true });
   phraseTimer = setInterval(() => {
     phraseIdx = (phraseIdx + 1) % STATUS_PHRASES.length;
-    setStatusPhrase(STATUS_PHRASES[phraseIdx], true);
-  }, 4500);
+    setLiveStatus(STATUS_PHRASES[phraseIdx], { live: true });
+  }, 4200);
 }
 
 function stopStatusPhrases() {
@@ -479,58 +482,67 @@ function stopStatusPhrases() {
   phraseTimer = null;
 }
 
-function appendActionStep(label, { done = false, kind = 'step', detail = '' } = {}) {
-  const ul = $('#action-steps');
-  if (!ul) return null;
-  const li = document.createElement('li');
-  li.className = `action-step kind-${kind}${done ? ' done' : ' running'}`;
-  const icon = kind === 'tool' ? '⚙' : kind === 'file' ? '📄' : kind === 'verify' ? '✓' : kind === 'error' ? '!' : '•';
-  li.innerHTML = `<span class="tool-icon">${icon}</span><div class="action-step-body"><span class="action-step-label">${escapeHtml(label)}</span>${detail ? `<pre class="action-step-detail">${escapeHtml(detail)}</pre>` : ''}</div>`;
-  ul.appendChild(li);
-  // keep latest in view
-  li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  return li;
+function appendLiveEvent({ title, detail = '', kind = 'step', done = false, meta = '' }) {
+  const track = $('#agent-live-track');
+  if (!track) return null;
+  const row = document.createElement('article');
+  row.className = `live-event kind-${kind}${done ? ' is-done' : ' is-running'}`;
+  row.innerHTML = `
+    <div class="live-event-rail" aria-hidden="true"><span class="live-event-node"></span></div>
+    <div class="live-event-card">
+      <div class="live-event-top">
+        <span class="live-event-title">${escapeHtml(title)}</span>
+        ${meta ? `<span class="live-event-meta">${escapeHtml(meta)}</span>` : ''}
+      </div>
+      ${detail ? `<pre class="live-event-detail">${escapeHtml(detail)}</pre>` : ''}
+    </div>`;
+  track.appendChild(row);
+  row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  return row;
 }
 
-function appendActionStream(line) {
-  const pre = $('#action-stream');
-  if (!pre) return;
-  const ts = new Date().toLocaleTimeString();
-  pre.textContent += (pre.textContent ? '\n' : '') + `[${ts}] ${line}`;
-  pre.scrollTop = pre.scrollHeight;
-}
-
-function renderActionFiles(verification) {
-  const wrap = $('#action-files');
-  const ul = $('#action-files-list');
-  if (!wrap || !ul) return;
+function renderLiveFiles(verification) {
+  const wrap = $('#agent-live-files');
+  if (!wrap) return;
   const diff = verification?.diff || {};
   const files = [
-    ...(diff.changed || []).map((f) => ({ f, k: 'M' })),
-    ...(diff.added || []).map((f) => ({ f, k: 'A' })),
-    ...(diff.removed || []).map((f) => ({ f, k: 'D' })),
-  ].slice(0, 40);
-  ul.innerHTML = '';
+    ...(diff.added || []).map((f) => ({ f, k: 'added' })),
+    ...(diff.changed || []).map((f) => ({ f, k: 'changed' })),
+    ...(diff.removed || []).map((f) => ({ f, k: 'removed' })),
+  ].slice(0, 24);
   if (!files.length) {
     wrap.classList.add('hidden');
+    wrap.innerHTML = '';
     return;
   }
   wrap.classList.remove('hidden');
-  for (const { f, k } of files) {
-    const li = document.createElement('li');
-    li.innerHTML = `<span class="check">✓</span><span>${escapeHtml(k)} ${escapeHtml(f)}</span>`;
-    ul.appendChild(li);
-  }
+  wrap.innerHTML = `<div class="live-files-label">Files touched</div>` + files.map(({ f, k }) =>
+    `<div class="live-file"><span class="live-file-tag ${k}">${k[0].toUpperCase()}</span><span>${escapeHtml(f)}</span></div>`
+  ).join('');
 }
 
-function resetActionHistory() {
-  showActionHistory();
-  const steps = $('#action-steps'); if (steps) steps.innerHTML = '';
-  const stream = $('#action-stream'); if (stream) stream.textContent = '';
-  const files = $('#action-files'); if (files) files.classList.add('hidden');
-  const sum = $('#action-history-summary'); if (sum) sum.textContent = 'Live';
+function resetAgentLive() {
+  showAgentLive();
+  const track = $('#agent-live-track');
+  if (track) track.innerHTML = '';
+  const files = $('#agent-live-files');
+  if (files) { files.classList.add('hidden'); files.innerHTML = ''; }
   startStatusPhrases();
+  setLiveStatus('Starting…', { live: true });
 }
+
+// Back-compat shims used by older call sites
+function showActionHistory() { showAgentLive(); }
+function resetActionHistory() { resetAgentLive(); }
+function setStatusPhrase(text, pulsing = true) { setLiveStatus(text || '', { live: Boolean(pulsing) }); }
+function appendActionStep(label, { done = false, kind = 'step', detail = '' } = {}) {
+  return appendLiveEvent({ title: label, detail, kind, done });
+}
+function appendActionStream(line) {
+  // fold stream lines into compact live events only when meaningful
+  if (!line || String(line).length < 2) return;
+}
+function renderActionFiles(v) { renderLiveFiles(v); }
 
 function closeDrawers() {
   $('#sidebar')?.classList.remove('open');
@@ -833,7 +845,7 @@ async function runAction(action) {
   $('#terminal').textContent = `Running ${action}…`;
   try {
     const res = await api(`/api/workspaces/${state.workspaceId}/actions/${action}`, { method: 'POST', body: '{}' });
-    if (!res.supported) { $('#terminal').textContent = res.reason || `Unsupported action for project type.`; return; }
+    if (!res.supported) { $('#terminal').textContent = res.reason || 'This project type does not use a traditional build step (static HTML is preview-ready).'; toast('No build step for this project — use Preview', 'ok'); return; }
     const last = res.results[res.results.length - 1];
     $('#terminal').textContent = `exit ${last.code} · ${last.durationMs}ms\n\n${last.stdout}\n${last.stderr}`;
     toast(`${action} ${res.ok ? 'passed' : 'failed'}`, res.ok ? 'ok' : 'err');
@@ -898,6 +910,14 @@ function addMessage(role, text, { html = false, skipSave = false } = {}) {
     });
     actions.appendChild(copyBtn);
     wrap.appendChild(actions);
+    bubble.addEventListener('click', (ev) => {
+      // Tap bubble to reveal copy under the response
+      if (ev.target.closest('a, button, .copy-code')) return;
+      document.querySelectorAll('.msg.is-selected').forEach((m) => {
+        if (m !== wrap) m.classList.remove('is-selected');
+      });
+      wrap.classList.toggle('is-selected');
+    });
   }
   $('#messages').appendChild(wrap);
   const mbox = $('#messages');
@@ -906,6 +926,13 @@ function addMessage(role, text, { html = false, skipSave = false } = {}) {
   updateEmptyStateVisibility();
   return bubble;
 }
+
+// Clear message selection when tapping outside a bubble
+$('#messages').addEventListener('click', (e) => {
+  if (!e.target.closest('.msg')) {
+    document.querySelectorAll('.msg.is-selected').forEach((m) => m.classList.remove('is-selected'));
+  }
+});
 
 // Copy-code delegation
 $('#messages').addEventListener('click', (e) => {
@@ -996,9 +1023,8 @@ function streamJob(jobId) {
   let agentRaw = '';
   const toolRows = new Map();
   resetAgentActivity();
-  resetActionHistory();
-  appendActionStep('Agent started', { kind: 'step' });
-  setStatusPhrase('Discovering the request…', true);
+  resetAgentLive();
+  appendLiveEvent({ title: 'Agent session opened', kind: 'step', done: true });
 
   es.onmessage = (e) => {
     let ev;
@@ -1007,69 +1033,81 @@ function streamJob(jobId) {
     if (ev.type === 'session') {
       setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
       appendAgentLog(`session ${ev.sessionId || ''}`);
-      appendActionStream(`session ${ev.sessionId || ''}`);
-      appendActionStep('Session connected', { done: true, kind: 'step' });
-      setStatusPhrase('Connecting tools…', true);
+      appendLiveEvent({ title: 'Connected to coding engine', kind: 'step', done: true, meta: 'session' });
+      setLiveStatus('Connected', { live: true });
     } else if (ev.type === 'task_list') {
       renderTaskList(ev.items || [], ev.mode);
-      for (const item of ev.items || []) appendActionStep(String(item), { kind: 'step' });
-      setStatusPhrase(ev.mode === 'plan' ? 'Drafting the plan…' : 'Working through the task list…', true);
-      appendActionStream(`task list (${(ev.items || []).length} items)`);
+      for (const item of ev.items || []) {
+        appendLiveEvent({ title: String(item), kind: 'step' });
+      }
+      setLiveStatus(ev.mode === 'plan' ? 'Planning…' : 'Working…', { live: true });
     } else if (ev.type === 'status') {
       setAgentStatus(ev.message || ev.phase || 'Working…');
       appendAgentLog(ev.message || ev.phase || 'status');
-      appendActionStream(ev.message || ev.phase || 'status');
-      appendActionStep(ev.message || ev.phase || 'status', { kind: 'step', done: true });
-      if (ev.phase === 'snapshot') setStatusPhrase('Creating recovery snapshot…', true);
-      else if (ev.phase === 'inspect') setStatusPhrase('Inspecting the workspace…', true);
-      else if (ev.phase === 'plan') setStatusPhrase('Planning the changes…', true);
-      else if (ev.phase === 'build') setStatusPhrase('Implementing changes…', true);
-      else if (ev.phase === 'repair') setStatusPhrase('Repairing failed checks…', true);
-      else if (ev.message) setStatusPhrase(ev.message, true);
-      if (ev.phase === 'inventory' && Array.isArray(ev.sample)) {
-        for (const p of ev.sample) appendActionStep(String(p), { kind: 'file', done: true });
+      if (ev.phase === 'inventory' && Array.isArray(ev.sample) && ev.sample.length) {
+        appendLiveEvent({
+          title: ev.message || 'Workspace inventory',
+          kind: 'file',
+          done: true,
+          detail: ev.sample.join('\n'),
+        });
+      } else if (ev.phase === 'error') {
+        appendLiveEvent({ title: ev.message || 'Error', kind: 'error', done: true });
+      } else {
+        appendLiveEvent({ title: ev.message || ev.phase || 'Status', kind: 'step', done: true, meta: ev.phase || '' });
       }
+      if (ev.phase === 'snapshot') setLiveStatus('Saving recovery point…', { live: true });
+      else if (ev.phase === 'inspect') setLiveStatus('Inspecting workspace…', { live: true });
+      else if (ev.phase === 'plan') setLiveStatus('Planning…', { live: true });
+      else if (ev.phase === 'build') setLiveStatus('Building…', { live: true });
+      else if (ev.phase === 'repair') setLiveStatus('Repairing…', { live: true });
+      else if (ev.message) setLiveStatus(ev.message, { live: true });
     } else if (ev.type === 'tool') {
       const name = ev.tool || 'tool';
       const label = ev.path ? `${name} · ${ev.path}` : name;
-      let row = toolRows.get(name + (ev.path || ''));
+      const key = name + (ev.path || '');
+      let row = toolRows.get(key);
+      const detail = [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200);
       if (!row) {
-        row = appendActionStep(label, {
+        row = appendLiveEvent({
+          title: label,
           kind: 'tool',
-          detail: [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200),
+          detail,
           done: ev.state === 'completed' || ev.state === 'done',
+          meta: 'tool',
         });
-        toolRows.set(name + (ev.path || ''), row);
-      } else if (ev.output || ev.state === 'completed') {
-        row.classList.add('done');
-        row.classList.remove('running');
-        const detail = row.querySelector('.action-step-detail');
-        const chunk = [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200);
-        if (detail && chunk) detail.textContent = chunk;
-        else if (chunk) {
-          const pre = document.createElement('pre');
-          pre.className = 'action-step-detail';
-          pre.textContent = chunk;
-          row.querySelector('.action-step-body')?.appendChild(pre);
+        toolRows.set(key, row);
+      } else {
+        row.classList.toggle('is-done', ev.state === 'completed' || ev.state === 'done');
+        row.classList.toggle('is-running', !(ev.state === 'completed' || ev.state === 'done'));
+        const d = row.querySelector('.live-event-detail');
+        if (detail) {
+          if (d) d.textContent = detail;
+          else {
+            const pre = document.createElement('pre');
+            pre.className = 'live-event-detail';
+            pre.textContent = detail;
+            row.querySelector('.live-event-card')?.appendChild(pre);
+          }
         }
       }
-      appendActionStream(`$ ${label}${ev.state ? ' [' + ev.state + ']' : ''}`);
-      setStatusPhrase(`Running ${name}…`, true);
+      setLiveStatus(`Running ${name}…`, { live: true });
       appendAgentLog(`tool ${name}`);
     } else if (ev.type === 'verification') {
       renderVerification(ev.verification, ev.repairRound);
-      renderActionFiles(ev.verification);
+      renderLiveFiles(ev.verification);
+      const ok = ev.verification?.successCriteria?.ok;
+      const reason = ev.verification?.successCriteria?.reason || (ok ? 'Verified' : 'Needs attention');
+      appendLiveEvent({
+        title: ok ? 'Verification passed' : 'Verification',
+        kind: ok ? 'verify' : 'error',
+        done: true,
+        detail: reason,
+      });
       if (ev.verification?.diff?.totalTouched === 0 && (ev.verification?.mode || 'build') !== 'plan') {
         toast('No files were changed in the workspace', 'err');
       }
-      const ok = ev.verification?.successCriteria?.ok;
-      appendAgentLog(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
-      appendActionStream(ok ? 'verification passed' : `verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`);
-      appendActionStep(ok ? 'Verification passed' : `Verification: ${ev.verification?.successCriteria?.reason || 'issues found'}`, {
-        kind: 'verify',
-        done: true,
-      });
-      setStatusPhrase(ok ? 'Verification passed' : 'Checking what still needs work…', !ok);
+      setLiveStatus(reason, { live: !ok });
     } else if (ev.type === 'part') {
       const role = ev.role || 'assistant';
       if (role === 'user' || role === 'system') return;
@@ -1080,43 +1118,35 @@ function streamJob(jobId) {
         agentBody.innerHTML = renderMarkdown(agentRaw);
         const mbox = $('#messages');
         if (mbox) mbox.scrollTop = mbox.scrollHeight;
-        const tail = part.text.trim();
-        if (tail) appendActionStream(tail.length > 400 ? tail.slice(0, 400) + '…' : tail);
+        saveChatHistory();
       } else if (part.type === 'tool' || part.tool) {
         const label = part.tool || part.name || 'tool';
-        appendActionStep(label, { kind: 'tool' });
-        appendAgentLog(`tool ${label}`);
-        appendActionStream(`$ ${label}`);
-        setStatusPhrase(`Running ${label}…`, true);
+        appendLiveEvent({ title: label, kind: 'tool' });
+        setLiveStatus(`Running ${label}…`, { live: true });
       } else if (part.type === 'reasoning' && part.text) {
-        appendActionStream(part.text.slice(0, 500));
-        appendActionStep('Thinking…', { kind: 'step', detail: part.text.slice(0, 500) });
+        appendLiveEvent({ title: 'Thinking', kind: 'think', detail: part.text.slice(0, 600) });
       } else if (part.type && part.type !== 'text') {
-        appendActionStream(`${part.type}${part.path ? ' ' + part.path : ''}`);
-        appendActionStep(part.type + (part.path ? ` · ${part.path}` : ''), { kind: 'step' });
+        appendLiveEvent({ title: part.type + (part.path ? ` · ${part.path}` : ''), kind: 'step' });
       }
     } else if (ev.type === 'done') {
       const ok = ev.status === 'completed';
       stopStatusPhrases();
-      setStatusPhrase(ok ? 'Built' : `Stopped — ${ev.error || ev.status}`, false);
-      const sum = $('#action-history-summary');
-      if (sum) sum.textContent = ok ? 'Completed' : 'Failed';
-      document.querySelectorAll('#action-steps li').forEach((li) => {
-        li.classList.add('done');
-        li.classList.remove('running');
+      setLiveStatus(ok ? 'Completed' : `Failed — ${ev.error || ev.status}`, { live: false });
+      document.querySelectorAll('#agent-live-track .live-event.is-running').forEach((n) => {
+        n.classList.remove('is-running');
+        n.classList.add('is-done');
       });
-      appendActionStep(ok ? 'Task completed' : `Task ${ev.status}${ev.error ? ': ' + ev.error : ''}`, {
+      appendLiveEvent({
+        title: ok ? 'Task completed' : `Task ${ev.status}`,
         kind: ok ? 'verify' : 'error',
         done: true,
+        detail: ev.error || '',
       });
       addMessage('tool', ok ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
       setAgentStatus(ok ? 'Completed' : `Failed: ${ev.error || ev.status}`);
-      appendAgentLog(ok ? 'done' : `failed: ${ev.error || ev.status}`);
-      appendActionStream(ok ? 'done' : `failed: ${ev.error || ev.status}`);
       es.close();
       state.stream = null;
       state.jobId = null;
-      /* cancel visibility via updateComposerState */
       updateComposerState();
       if (state.workspaceId) {
         refreshFiles().catch(() => {});
@@ -1124,22 +1154,19 @@ function streamJob(jobId) {
         if (state.previewOpen) refreshPreview(false);
       }
       if (!ok) toast(ev.error || 'Task did not complete successfully', 'err');
+      hideAgentLiveIdle();
     }
   };
 
   es.onerror = () => {
     stopStatusPhrases();
-    setStatusPhrase('Stream disconnected — reconnect or resend', false);
-    const sum = $('#action-history-summary');
-    if (sum) sum.textContent = 'Disconnected';
-    appendActionStep('Stream disconnected', { kind: 'error', done: true });
+    setLiveStatus('Stream disconnected', { live: false });
+    appendLiveEvent({ title: 'Stream disconnected', kind: 'error', done: true });
     addMessage('tool', '⚠️ Stream disconnected');
     setAgentStatus('Stream disconnected');
-    appendActionStream('stream disconnected');
     es.close();
     state.stream = null;
     state.jobId = null;
-    /* cancel visibility via updateComposerState */
     updateComposerState();
   };
 }
