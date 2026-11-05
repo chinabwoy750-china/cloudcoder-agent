@@ -586,19 +586,35 @@ function closeDrawers() {
   $('#sidebar')?.classList.remove('open');
   $('#inspector')?.classList.remove('open');
   const scrim = $('#scrim');
-  if (scrim) { scrim.classList.remove('visible'); scrim.setAttribute('hidden', ''); }
+  if (scrim) {
+    scrim.classList.remove('visible');
+    scrim.setAttribute('hidden', '');
+    scrim.style.pointerEvents = 'none';
+  }
+  document.body.classList.remove('drawer-open');
 }
 function openSidebar() {
   $('#inspector')?.classList.remove('open');
   $('#sidebar')?.classList.add('open');
   const scrim = $('#scrim');
-  if (scrim) { scrim.classList.add('visible'); scrim.removeAttribute('hidden'); }
+  if (scrim) {
+    scrim.classList.add('visible');
+    scrim.removeAttribute('hidden');
+    // Scrim stays under the drawer (z-index); only dims the page behind
+    scrim.style.pointerEvents = 'auto';
+  }
+  document.body.classList.add('drawer-open');
 }
 function openInspector() {
   $('#sidebar')?.classList.remove('open');
   $('#inspector')?.classList.add('open');
   const scrim = $('#scrim');
-  if (scrim) { scrim.classList.add('visible'); scrim.removeAttribute('hidden'); }
+  if (scrim) {
+    scrim.classList.add('visible');
+    scrim.removeAttribute('hidden');
+    scrim.style.pointerEvents = 'auto';
+  }
+  document.body.classList.add('drawer-open');
 }
 $('#menu-btn')?.addEventListener('click', openSidebar);
 $('#sidebar-close')?.addEventListener('click', closeDrawers);
@@ -609,6 +625,8 @@ $('#scrim')?.addEventListener('click', closeDrawers);
 /* ---------------- Navigation ---------------- */
 
 $$('.nav-btn').forEach((btn) => {
+  // close mobile drawer when navigating
+
   btn.addEventListener('click', () => {
     $$('.nav-btn').forEach((b) => b.classList.toggle('active', b === btn));
     const view = btn.dataset.view;
@@ -698,7 +716,7 @@ function openWorkspaceModal() {
   setTimeout(() => $('#workspace-name-input')?.focus(), 20);
 }
 function closeWorkspaceModal() { $('#workspace-modal')?.classList.add('hidden'); }
-$('#new-workspace').addEventListener('click', openWorkspaceModal);
+$('#new-workspace').addEventListener('click', () => { closeDrawers(); openWorkspaceModal(); });
 $('#workspace-cancel')?.addEventListener('click', closeWorkspaceModal);
 $('#workspace-modal')?.addEventListener('click', (e) => { if (e.target.id === 'workspace-modal') closeWorkspaceModal(); });
 $('#workspace-form')?.addEventListener('submit', async (e) => {
@@ -722,6 +740,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 });
 
 async function selectWorkspace(id) {
+  closeDrawers();
   setShell('workspace');
   await loadChatHistory(id);
   state.workspaceId = id;

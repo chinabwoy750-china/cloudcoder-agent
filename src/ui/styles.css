@@ -1602,48 +1602,101 @@ body.shell-workspace-active .msg.agent .bubble {
   }
 }
 
+
 /* Mobile overrides after desktop workspace grid */
 @media (max-width: 900px) {
   body.shell-workspace-active .app {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    grid-template-rows: none !important;
     height: 100dvh;
+    overflow: hidden;
   }
   body.shell-workspace-active #shell-workspace {
-    display: contents;
-  }
-  body.shell-workspace-active .sidebar {
-    position: fixed;
-    z-index: 50;
-    transform: translateX(-105%);
-    width: min(300px, 88vw);
-    height: 100%;
-  }
-  body.shell-workspace-active .sidebar.open {
-    transform: translateX(0);
+    display: flex !important;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    position: relative;
   }
   body.shell-workspace-active .main {
-    grid-column: 1;
-    grid-row: 1 / -1;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    position: relative;
+    z-index: 1;
+  }
+  body.shell-workspace-active .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(300px, 88vw) !important;
+    height: 100% !important;
+    max-height: 100dvh;
+    z-index: 80 !important;
+    transform: translateX(-105%);
+    transition: transform .24s cubic-bezier(.32,.72,0,1);
+    pointer-events: auto !important;
+    display: flex !important;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    background: #0e1016 !important;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    box-shadow: none;
+  }
+  body.shell-workspace-active .sidebar.open {
+    transform: translateX(0) !important;
+    box-shadow: 12px 0 40px rgba(0,0,0,.55);
   }
   body.shell-workspace-active .inspector {
-    position: fixed;
-    right: 0;
+    position: fixed !important;
     top: 0;
+    right: 0;
     bottom: 0;
-    width: min(320px, 90vw);
-    z-index: 50;
+    width: min(320px, 90vw) !important;
+    height: 100% !important;
+    z-index: 80 !important;
     transform: translateX(105%);
+    transition: transform .24s cubic-bezier(.32,.72,0,1);
+    pointer-events: auto !important;
+    display: flex !important;
+    flex-direction: column;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    background: #0e1016 !important;
   }
   body.shell-workspace-active .inspector.open {
-    transform: translateX(0);
+    transform: translateX(0) !important;
+    box-shadow: -12px 0 40px rgba(0,0,0,.55);
   }
   body.shell-workspace-active .topbar {
     display: flex !important;
+    position: relative;
+    z-index: 2;
   }
   body.shell-workspace-active .mobile-only {
     display: inline-flex !important;
+  }
+  /* Scrim UNDER drawers so menu stays tappable */
+  .scrim {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 70 !important;
+    background: rgba(2, 4, 10, 0.62) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 0;
+    pointer-events: none !important;
+    transition: opacity .2s ease;
+  }
+  .scrim.visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
   }
   body.shell-home-active .home-center {
     max-width: 100%;
@@ -1933,20 +1986,27 @@ body.shell-workspace-active #view-chat .composer-wrap {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-  /* Prevent transform-induced blurriness on open drawers */
-  .sidebar,
-  .inspector {
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
+  /* Keep drawers sharp; transforms only for open/close slide */
+}
+
+/* Ensure drawer controls are always tappable on mobile */
+@media (max-width: 900px) {
+  #sidebar,
+  #sidebar * {
+    pointer-events: auto;
   }
-  .sidebar:not(.open) {
-    transform: translateX(-105%);
+  #sidebar a,
+  #sidebar button,
+  #sidebar .clickable,
+  #sidebar li {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(124,158,255,0.25);
   }
-  .inspector:not(.open) {
-    transform: translateX(105%);
+  #scrim {
+    z-index: 70 !important;
   }
-  .sidebar.open,
-  .inspector.open {
-    transform: translateX(0);
+  #sidebar,
+  #inspector {
+    z-index: 80 !important;
   }
 }
