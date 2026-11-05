@@ -30,7 +30,20 @@ const state = {
   modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
   shell: 'home',
   menuWorkspaceId: null,
+  submitting: false,
 };
+
+function resetJobState(reason = '') {
+  if (state.stream) {
+    try { state.stream.close(); } catch {}
+    state.stream = null;
+  }
+  state.jobId = null;
+  state.submitting = false;
+  if (reason) console.info('[job]', reason);
+  updateComposerState();
+}
+
 
 /* ---------------- Utilities ---------------- */
 
@@ -741,6 +754,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 
 async function selectWorkspace(id) {
   closeDrawers();
+  resetJobState('workspace-switch');
   setShell('workspace');
   await loadChatHistory(id);
   state.workspaceId = id;
@@ -1024,21 +1038,38 @@ document.addEventListener('click', (e) => {
 $('#composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('#prompt').value.trim();
-  if (!prompt) return;
-  if (!state.openCodeReady) return toast('The coding engine is still starting — wait a few seconds', 'err');
+  if (!prompt) {
+    toast('Type a message first', 'err');
+    return;
+  }
+  if (state.submitting) return;
+  // Clear any stuck previous job so follow-up messages always work
+  if (state.jobId || state.stream) {
+    resetJobState('new-submit-clears-previous');
+  }
+  if (!state.openCodeReady) {
+    toast('The coding engine is still starting — wait a few seconds', 'err');
+    return;
+  }
   if (!state.workspaceId) {
     try {
-      const created = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name: prompt.slice(0, 48).replace(/\s+/g, ' ').trim() || 'New project' }) });
+      const created = await api('/api/workspaces', {
+        method: 'POST',
+        body: JSON.stringify({ name: prompt.slice(0, 48).replace(/\s+/g, ' ').trim() || 'New project' }),
+      });
       await refreshWorkspaces();
       await selectWorkspace(created.workspaceId);
-    } catch (err) { return toast(`Could not create project: ${err.message}`, 'err'); }
+    } catch (err) {
+      toast(`Could not create project: ${err.message}`, 'err');
+      return;
+    }
   }
 
+  state.submitting = true;
   addMessage('user', prompt);
   $('#prompt').value = '';
   autoGrow();
   state.jobId = 'pending';
-  /* cancel visibility via updateComposerState */
   updateComposerState();
 
   try {
@@ -1048,19 +1079,22 @@ $('#composer').addEventListener('submit', async (e) => {
     const modePrompt = composerMode === 'plan'
       ? `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`
       : `BUILD MODE: Implement the requested changes in the project, then run appropriate checks and report what was verified.\n\nUser request: ${prompt}`;
-    const { jobId } = await api('/api/agent/tasks', {
+    const res = await api('/api/agent/tasks', {
       method: 'POST',
       body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, mode }),
     });
+    const jobId = res?.jobId;
+    if (!jobId) throw new Error('Server did not return a job id');
     state.jobId = jobId;
+    state.submitting = false;
+    updateComposerState();
     resetActionHistory();
     setStatusPhrase('Discovering the request…', true);
     streamJob(jobId);
   } catch (err) {
     addMessage('tool', `Error: ${err.message}`);
-    state.jobId = null;
-    /* cancel visibility via updateComposerState */
-    updateComposerState();
+    toast(err.message || 'Could not start task', 'err');
+    resetJobState('submit-failed');
   }
 });
 
@@ -1073,19 +1107,75 @@ $('#prompt').addEventListener('keydown', (e) => {
 });
 
 function streamJob(jobId) {
-  if (state.stream) state.stream.close();
+  if (state.stream) {
+    try { state.stream.close(); } catch {}
+    state.stream = null;
+  }
   const es = new EventSource(`/api/agent/tasks/${jobId}/stream`);
   state.stream = es;
+  state.jobId = jobId;
   let agentBody = null;
   let agentRaw = '';
+  let finished = false;
+  let sawEvent = false;
   const toolRows = new Map();
+  let errorCount = 0;
   resetAgentActivity();
   resetAgentLive();
   appendLiveEvent({ title: 'Agent session opened', kind: 'step', done: true });
+  updateComposerState();
+
+  const finishClient = (ok, errorText) => {
+    if (finished) return;
+    finished = true;
+    stopStatusPhrases();
+    setLiveStatus(ok ? 'Completed' : `Failed — ${errorText || 'stopped'}`, { live: false });
+    document.querySelectorAll('#agent-live-track .live-event.is-running').forEach((n) => {
+      n.classList.remove('is-running');
+      n.classList.add('is-done');
+    });
+    appendLiveEvent({
+      title: ok ? 'Task completed' : 'Task ended',
+      kind: ok ? 'verify' : 'error',
+      done: true,
+      detail: errorText || '',
+    });
+    addMessage('tool', ok ? '✅ Task completed' : `❌ ${errorText || 'Task failed'}`);
+    setAgentStatus(ok ? 'Completed' : `Failed: ${errorText || ''}`);
+    try { es.close(); } catch {}
+    state.stream = null;
+    state.jobId = null;
+    state.submitting = false;
+    updateComposerState();
+    if (state.workspaceId) {
+      refreshFiles().catch(() => {});
+      refreshWorkspaces().catch(() => {});
+      if (state.previewOpen) refreshPreview(false);
+    }
+    if (!ok && errorText) toast(errorText, 'err');
+    hideAgentLiveIdle();
+  };
+
+  // Fallback poller — recovers when SSE drops but job still finishes server-side
+  const poll = setInterval(async () => {
+    if (finished || state.jobId !== jobId) {
+      clearInterval(poll);
+      return;
+    }
+    try {
+      const st = await api(`/api/agent/tasks/${jobId}`);
+      if (st?.status === 'completed' || st?.status === 'failed') {
+        clearInterval(poll);
+        finishClient(st.status === 'completed', st.error || '');
+      }
+    } catch { /* ignore transient */ }
+  }, 4000);
 
   es.onmessage = (e) => {
     let ev;
     try { ev = JSON.parse(e.data); } catch { return; }
+    sawEvent = true;
+    errorCount = 0;
 
     if (ev.type === 'session') {
       setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
@@ -1094,20 +1184,13 @@ function streamJob(jobId) {
       setLiveStatus('Connected', { live: true });
     } else if (ev.type === 'task_list') {
       renderTaskList(ev.items || [], ev.mode);
-      for (const item of ev.items || []) {
-        appendLiveEvent({ title: String(item), kind: 'step' });
-      }
+      for (const item of ev.items || []) appendLiveEvent({ title: String(item), kind: 'step' });
       setLiveStatus(ev.mode === 'plan' ? 'Planning…' : 'Working…', { live: true });
     } else if (ev.type === 'status') {
       setAgentStatus(ev.message || ev.phase || 'Working…');
       appendAgentLog(ev.message || ev.phase || 'status');
       if (ev.phase === 'inventory' && Array.isArray(ev.sample) && ev.sample.length) {
-        appendLiveEvent({
-          title: ev.message || 'Workspace inventory',
-          kind: 'file',
-          done: true,
-          detail: ev.sample.join('\n'),
-        });
+        appendLiveEvent({ title: ev.message || 'Workspace inventory', kind: 'file', done: true, detail: ev.sample.join('\n') });
       } else if (ev.phase === 'error') {
         appendLiveEvent({ title: ev.message || 'Error', kind: 'error', done: true });
       } else {
@@ -1126,13 +1209,7 @@ function streamJob(jobId) {
       let row = toolRows.get(key);
       const detail = [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200);
       if (!row) {
-        row = appendLiveEvent({
-          title: label,
-          kind: 'tool',
-          detail,
-          done: ev.state === 'completed' || ev.state === 'done',
-          meta: 'tool',
-        });
+        row = appendLiveEvent({ title: label, kind: 'tool', detail, done: ev.state === 'completed' || ev.state === 'done', meta: 'tool' });
         toolRows.set(key, row);
       } else {
         row.classList.toggle('is-done', ev.state === 'completed' || ev.state === 'done');
@@ -1155,12 +1232,7 @@ function streamJob(jobId) {
       renderLiveFiles(ev.verification);
       const ok = ev.verification?.successCriteria?.ok;
       const reason = ev.verification?.successCriteria?.reason || (ok ? 'Verified' : 'Needs attention');
-      appendLiveEvent({
-        title: ok ? 'Verification passed' : 'Verification',
-        kind: ok ? 'verify' : 'error',
-        done: true,
-        detail: reason,
-      });
+      appendLiveEvent({ title: ok ? 'Verification passed' : 'Verification', kind: ok ? 'verify' : 'error', done: true, detail: reason });
       if (ev.verification?.diff?.totalTouched === 0 && (ev.verification?.mode || 'build') !== 'plan') {
         toast('No files were changed in the workspace', 'err');
       }
@@ -1186,45 +1258,22 @@ function streamJob(jobId) {
         appendLiveEvent({ title: part.type + (part.path ? ` · ${part.path}` : ''), kind: 'step' });
       }
     } else if (ev.type === 'done') {
-      const ok = ev.status === 'completed';
-      stopStatusPhrases();
-      setLiveStatus(ok ? 'Completed' : `Failed — ${ev.error || ev.status}`, { live: false });
-      document.querySelectorAll('#agent-live-track .live-event.is-running').forEach((n) => {
-        n.classList.remove('is-running');
-        n.classList.add('is-done');
-      });
-      appendLiveEvent({
-        title: ok ? 'Task completed' : `Task ${ev.status}`,
-        kind: ok ? 'verify' : 'error',
-        done: true,
-        detail: ev.error || '',
-      });
-      addMessage('tool', ok ? '✅ Task completed' : `❌ Task ${ev.status}${ev.error ? `: ${ev.error}` : ''}`);
-      setAgentStatus(ok ? 'Completed' : `Failed: ${ev.error || ev.status}`);
-      es.close();
-      state.stream = null;
-      state.jobId = null;
-      updateComposerState();
-      if (state.workspaceId) {
-        refreshFiles().catch(() => {});
-        refreshWorkspaces().catch(() => {});
-        if (state.previewOpen) refreshPreview(false);
-      }
-      if (!ok) toast(ev.error || 'Task did not complete successfully', 'err');
-      hideAgentLiveIdle();
+      clearInterval(poll);
+      finishClient(ev.status === 'completed', ev.error || '');
     }
   };
 
+  // Do NOT kill the job on the first transient SSE error (common on mobile).
   es.onerror = () => {
-    stopStatusPhrases();
-    setLiveStatus('Stream disconnected', { live: false });
-    appendLiveEvent({ title: 'Stream disconnected', kind: 'error', done: true });
-    addMessage('tool', '⚠️ Stream disconnected');
-    setAgentStatus('Stream disconnected');
-    es.close();
-    state.stream = null;
-    state.jobId = null;
-    updateComposerState();
+    errorCount += 1;
+    if (finished) return;
+    if (!sawEvent && errorCount < 3) return; // allow reconnect attempts
+    // Keep jobId busy; poller will finish when server completes
+    setLiveStatus('Reconnecting stream…', { live: true });
+    if (errorCount >= 8) {
+      clearInterval(poll);
+      finishClient(false, 'Stream disconnected');
+    }
   };
 }
 
@@ -1315,8 +1364,10 @@ function renderVerification(verification, repairRound) {
 
 $('#cancel-btn').addEventListener('click', async () => {
   if (!state.jobId) return;
-  await api(`/api/agent/tasks/${state.jobId}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
+  const id = state.jobId;
+  await api(`/api/agent/tasks/${id}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
   toast('Cancellation requested');
+  resetJobState('cancelled');
 });
 
 $('#attach-btn').addEventListener('click', () => $('#attach-input').click());
