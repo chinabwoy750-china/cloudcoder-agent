@@ -891,6 +891,7 @@ async function selectWorkspace(id) {
   await loadChatHistory(id);
   const ws = state.workspaces.find((w) => w.id === id);
   setProjectTitle(ws?.name || 'Project');
+  if (isDesktopStudio()) { setStudioTab('preview'); loadStudioPreview(); }
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);
@@ -1423,6 +1424,7 @@ function streamJob(jobId) {
     updateComposerState();
     if (state.workspaceId) {
       refreshFiles().catch(() => {});
+        if (isDesktopStudio()) { refreshStudioCodeTree().catch(() => {}); loadStudioPreview(true); }
       refreshWorkspaces().catch(() => {});
       if (state.previewOpen) refreshPreview(false);
     }
@@ -2218,6 +2220,7 @@ async function refreshSnapshots() {
           });
           toast('Snapshot restored', 'ok');
           await refreshFiles().catch(() => {});
+        if (isDesktopStudio()) { refreshStudioCodeTree().catch(() => {}); loadStudioPreview(true); }
           if (state.previewOpen) await refreshPreview(false);
           await refreshSnapshots();
         } catch (err) {
@@ -2277,3 +2280,206 @@ $('#telegram-settings-form')?.addEventListener('submit', async (e) => {
     if (btn) btn.disabled = false;
   }
 });
+
+/* ---------------- Desktop studio panel ---------------- */
+function isDesktopStudio() {
+  return window.matchMedia && window.matchMedia('(min-width: 901px)').matches;
+}
+
+function setStudioTab(tab) {
+  document.querySelectorAll('.studio-tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.studioTab === tab);
+  });
+  document.querySelectorAll('.studio-pane').forEach((p) => {
+    p.classList.toggle('active', p.dataset.studioPane === tab);
+  });
+  const toolbar = $('#studio-preview-toolbar');
+  if (toolbar) toolbar.style.display = tab === 'preview' ? '' : 'none';
+  if (tab === 'code') refreshStudioCodeTree().catch(() => {});
+  if (tab === 'files') refreshStudioUploads().catch(() => {});
+  if (tab === 'preview' && state.workspaceId) loadStudioPreview();
+}
+
+document.querySelectorAll('.studio-tab').forEach((btn) => {
+  btn.addEventListener('click', () => setStudioTab(btn.dataset.studioTab));
+});
+
+document.querySelectorAll('.device-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.device-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    const frame = $('#device-frame');
+    if (frame) frame.dataset.device = btn.dataset.device || 'desktop';
+  });
+});
+
+$('#studio-refresh-btn')?.addEventListener('click', () => loadStudioPreview(true));
+
+function loadStudioPreview(force = false) {
+  const frame = $('#studio-preview-frame');
+  const empty = $('#studio-preview-empty');
+  if (!state.workspaceId || !frame) return;
+  const url = `/api/workspaces/${encodeURIComponent(state.workspaceId)}/preview${force ? `?t=${Date.now()}` : ''}`;
+  frame.src = url;
+  frame.addEventListener('load', () => {
+    if (empty) empty.classList.add('hidden');
+  }, { once: true });
+  // if preview errors, empty stays
+  setTimeout(() => {
+    try {
+      // keep empty hidden once src set; server may still 404
+      if (empty && frame.src) empty.classList.add('hidden');
+    } catch {}
+  }, 600);
+}
+
+async function refreshStudioCodeTree() {
+  const tree = $('#studio-code-tree');
+  if (!tree || !state.workspaceId) return;
+  tree.innerHTML = '<li class="muted">Loading…</li>';
+  try {
+    const files = await api(`/api/workspaces/${state.workspaceId}/files`);
+    const list = (files || []).filter((f) => f.type === 'file');
+    tree.innerHTML = '';
+    if (!list.length) {
+      tree.innerHTML = '<li class="muted">No files yet</li>';
+      return;
+    }
+    for (const f of list.slice(0, 200)) {
+      const li = document.createElement('li');
+      li.textContent = f.path;
+      li.title = f.path;
+      li.addEventListener('click', async () => {
+        tree.querySelectorAll('li').forEach((x) => x.classList.remove('active'));
+        li.classList.add('active');
+        const pathEl = $('#studio-code-path');
+        if (pathEl) pathEl.textContent = f.path;
+        const body = $('#studio-code-content code') || $('#studio-code-content');
+        try {
+          const res = await fetch(`/api/workspaces/${state.workspaceId}/file?path=${encodeURIComponent(f.path)}`, { credentials: 'same-origin' });
+          const text = await res.text();
+          if (body) body.textContent = text.slice(0, 120000);
+        } catch (err) {
+          if (body) body.textContent = String(err.message || err);
+        }
+      });
+      tree.appendChild(li);
+    }
+  } catch (err) {
+    tree.innerHTML = `<li class="muted">${escapeHtml(err.message)}</li>`;
+  }
+}
+
+async function refreshStudioUploads() {
+  const ul = $('#studio-uploads-list');
+  if (!ul || !state.workspaceId) return;
+  ul.innerHTML = '<li class="muted">Loading…</li>';
+  try {
+    const files = await api(`/api/workspaces/${state.workspaceId}/files`);
+    const uploads = (files || []).filter((f) => f.type === 'file' && /(upload|assets\/uploads|media\/)/i.test(f.path));
+    // Fallback: show non-code media-ish files
+    const media = uploads.length ? uploads : (files || []).filter((f) => f.type === 'file' && /\.(png|jpe?g|gif|webp|svg|pdf|zip|mp4|mp3)$/i.test(f.path));
+    ul.innerHTML = '';
+    const list = media.length ? media : [];
+    if (!list.length) {
+      ul.innerHTML = '<li class="muted">No uploads yet</li>';
+      return;
+    }
+    for (const f of list.slice(0, 100)) {
+      const li = document.createElement('li');
+      li.textContent = f.path;
+      ul.appendChild(li);
+    }
+  } catch (err) {
+    ul.innerHTML = `<li class="muted">${escapeHtml(err.message)}</li>`;
+  }
+}
+
+// Studio tools
+document.querySelectorAll('.studio-tool').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tool = btn.dataset.studioTool;
+    if (tool === 'more') {
+      $('#studio-more-menu')?.classList.toggle('hidden');
+      return;
+    }
+    document.querySelectorAll('.studio-tool').forEach((b) => {
+      if (b.dataset.studioTool !== 'more') b.classList.toggle('active', b === btn);
+    });
+    if (tool === 'select') {
+      const t = $('#visual-edit-toggle');
+      if (t && t.getAttribute('aria-pressed') !== 'true') t.click();
+      toast('Select elements in the preview', 'ok');
+    } else if (tool === 'text') {
+      toast('Inline text edit — select text elements in preview', 'ok');
+      const t = $('#visual-edit-toggle');
+      if (t && t.getAttribute('aria-pressed') !== 'true') t.click();
+    } else if (tool === 'annotate') {
+      toast('Annotation mode coming next — sketch feedback on the canvas', 'ok');
+    }
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#studio-tool-more') && !e.target.closest('#studio-more-menu')) {
+    $('#studio-more-menu')?.classList.add('hidden');
+  }
+});
+
+$('#studio-theme-btn')?.addEventListener('click', () => {
+  $('#studio-more-menu')?.classList.add('hidden');
+  document.querySelector('.settings-tab[data-settings-tab="appearance"]')?.click();
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== 'view-settings'));
+  toast('Adjust theme under Appearance', 'ok');
+});
+
+$('#studio-publish-btn')?.addEventListener('click', () => {
+  $('#studio-more-menu')?.classList.add('hidden');
+  toast('Publish: download ZIP or connect a host from project actions', 'ok');
+  if (state.workspaceId) window.open(`/api/workspaces/${state.workspaceId}/zip`, '_blank');
+});
+
+/* Resizable panes */
+(function setupPaneResize() {
+  const root = document.documentElement;
+  const storedNav = Number(localStorage.getItem('um_nav_w') || 260);
+  const storedStudio = Number(localStorage.getItem('um_studio_w') || Math.round(window.innerWidth * 0.4));
+  root.style.setProperty('--nav-w', `${Math.min(360, Math.max(200, storedNav))}px`);
+  root.style.setProperty('--studio-w', `${Math.min(window.innerWidth * 0.55, Math.max(320, storedStudio))}px`);
+
+  function bind(resizer, which) {
+    if (!resizer) return;
+    let startX = 0;
+    let startVal = 0;
+    const onMove = (e) => {
+      const dx = e.clientX - startX;
+      if (which === 'nav') {
+        const next = Math.min(380, Math.max(200, startVal + dx));
+        root.style.setProperty('--nav-w', `${next}px`);
+      } else {
+        // dragging studio resizer: moving right shrinks studio
+        const next = Math.min(window.innerWidth * 0.6, Math.max(300, startVal - dx));
+        root.style.setProperty('--studio-w', `${next}px`);
+      }
+    };
+    const onUp = () => {
+      resizer.classList.remove('dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      localStorage.setItem('um_nav_w', String(parseInt(getComputedStyle(root).getPropertyValue('--nav-w'), 10) || 260));
+      localStorage.setItem('um_studio_w', String(parseInt(getComputedStyle(root).getPropertyValue('--studio-w'), 10) || 420));
+    };
+    resizer.addEventListener('mousedown', (e) => {
+      if (!isDesktopStudio()) return;
+      e.preventDefault();
+      startX = e.clientX;
+      startVal = parseInt(getComputedStyle(root).getPropertyValue(which === 'nav' ? '--nav-w' : '--studio-w'), 10) || (which === 'nav' ? 260 : 420);
+      resizer.classList.add('dragging');
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+  bind($('#resizer-nav'), 'nav');
+  bind($('#resizer-studio'), 'studio');
+})();
+
+// When entering workspace on desktop, default studio to preview
