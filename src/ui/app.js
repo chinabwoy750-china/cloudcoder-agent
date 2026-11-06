@@ -1998,7 +1998,7 @@ async function loadModels() {
 
   const pref = restoreModel();
   if (pref && state.models.includes(pref)) {
-    sel.value = pref;
+    if (sel) sel.value = pref;
     if (settingsSel) settingsSel.value = pref;
   }
 
