@@ -709,28 +709,18 @@ $('#menu-btn')?.addEventListener('click', openSidebar);
     if (Math.abs(dy) > MAX_VERTICAL) return;
     if (Math.abs(dx) < THRESH) return;
 
-    // Swipe left → navigation sidebar
+    // Finger moves left (dx negative) → open navigation
     if (dx < -THRESH) {
-      if (state.previewOpen) {
-        closePreview();
-        return;
-      }
+      if (state.previewOpen) { closePreview(); return; }
+      if ($('#sidebar')?.classList.contains('open')) return;
       openSidebar();
       return;
     }
-    // Swipe right → preview (or close sidebar if open — handled above)
+    // Finger moves right (dx positive) → open preview
     if (dx > THRESH) {
-      if ($('#sidebar')?.classList.contains('open')) {
-        closeDrawers();
-        return;
-      }
-      // From left edge, swipe right can also mean "open nav" on some apps;
-      // user asked: right = preview, left = nav.
-      if (!state.workspaceId) {
-        toast('Open a project to use preview', 'err');
-        return;
-      }
-      openPreview();
+      if ($('#sidebar')?.classList.contains('open')) { closeDrawers(); return; }
+      if (!state.workspaceId) { toast('Open a project to use preview', 'err'); return; }
+      if (!state.previewOpen) openPreview();
     }
   }
 
@@ -1372,6 +1362,148 @@ $('#project-title-btn')?.addEventListener('click', () => {
 });
 
 
+
+/* -------- In-chat agent activity cards (Lovable-style, improved) -------- */
+function toolTitle(name, path) {
+  const n = String(name || 'tool').toLowerCase();
+  if (n.includes('list') || n.includes('dir') || n.includes('ls')) return 'Listed directory';
+  if (n.includes('read') || n.includes('cat') || n.includes('open')) return 'Read file';
+  if (n.includes('write') || n.includes('create') || n.includes('edit') || n.includes('apply')) return 'Edited file';
+  if (n.includes('search') || n.includes('grep') || n.includes('find')) return 'Searched code';
+  if (n.includes('bash') || n.includes('shell') || n.includes('run') || n.includes('exec')) return 'Ran command';
+  if (n.includes('think') || n.includes('reason')) return 'Reasoning';
+  return name || 'Tool';
+}
+
+function activityIcon(kind) {
+  if (kind === 'read' || kind === 'file') return '📄';
+  if (kind === 'list' || kind === 'dir') return '📁';
+  if (kind === 'edit' || kind === 'write') return '✏️';
+  if (kind === 'search') return '🔎';
+  if (kind === 'run' || kind === 'bash') return '⌘';
+  if (kind === 'think' || kind === 'reason') return '💡';
+  return '✦';
+}
+
+function classifyTool(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.includes('list') || n.includes('dir')) return 'list';
+  if (n.includes('read') || n.includes('cat')) return 'read';
+  if (n.includes('write') || n.includes('edit') || n.includes('create')) return 'edit';
+  if (n.includes('search') || n.includes('grep')) return 'search';
+  if (n.includes('bash') || n.includes('shell') || n.includes('run')) return 'run';
+  if (n.includes('think') || n.includes('reason')) return 'think';
+  return 'tool';
+}
+
+function appendActivityCard({
+  title,
+  path = '',
+  kind = 'tool',
+  input = '',
+  output = '',
+  reasoning = '',
+  done = false,
+} = {}) {
+  const box = $('#messages');
+  if (!box) return null;
+  $('#empty-state')?.classList.add('hidden');
+
+  const card = document.createElement('article');
+  card.className = `activity-card kind-${kind}${done ? ' is-done' : ' is-running'}`;
+  const headId = `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const hasBody = Boolean(input || output || reasoning);
+  const pathHtml = path ? `<span class="activity-path">${escapeHtml(path)}</span>` : '';
+  const previewOut = String(output || reasoning || input || '').trim();
+  const short = previewOut.length > 140 ? `${previewOut.slice(0, 140)}…` : previewOut;
+
+  card.innerHTML = `
+    <button type="button" class="activity-head" aria-expanded="false" aria-controls="${headId}-body">
+      <span class="activity-rail" aria-hidden="true"></span>
+      <span class="activity-icon" aria-hidden="true">${activityIcon(kind)}</span>
+      <span class="activity-title-wrap">
+        <span class="activity-title">${escapeHtml(title || 'Step')}</span>
+        ${pathHtml}
+      </span>
+      <span class="activity-chev" aria-hidden="true">▾</span>
+    </button>
+    <div class="activity-preview muted small">${escapeHtml(short)}</div>
+    <div class="activity-body collapsed" id="${headId}-body">
+      ${reasoning ? `<div class="activity-block"><div class="activity-label">Reasoning</div><pre>${escapeHtml(reasoning)}</pre></div>` : ''}
+      ${input ? `<div class="activity-block"><div class="activity-label">Input</div><pre>${escapeHtml(input)}</pre></div>` : ''}
+      ${output ? `<div class="activity-block"><div class="activity-label">Output</div><pre>${escapeHtml(output)}</pre></div>` : ''}
+      ${hasBody ? '' : `<div class="activity-block"><div class="activity-label">Details</div><pre class="muted">No extra detail for this step.</pre></div>`}
+      <button type="button" class="activity-show-less">Show less</button>
+    </div>
+    ${hasBody ? `<button type="button" class="activity-show-more">Show more</button>` : ''}
+  `;
+
+  const head = card.querySelector('.activity-head');
+  const body = card.querySelector('.activity-body');
+  const more = card.querySelector('.activity-show-more');
+  const less = card.querySelector('.activity-show-less');
+  const prev = card.querySelector('.activity-preview');
+
+  function expand() {
+    body?.classList.remove('collapsed');
+    head?.setAttribute('aria-expanded', 'true');
+    card.classList.add('is-expanded');
+    if (more) more.hidden = true;
+    if (prev) prev.hidden = true;
+  }
+  function collapse() {
+    body?.classList.add('collapsed');
+    head?.setAttribute('aria-expanded', 'false');
+    card.classList.remove('is-expanded');
+    if (more) more.hidden = false;
+    if (prev) prev.hidden = false;
+  }
+  head?.addEventListener('click', () => {
+    if (body?.classList.contains('collapsed')) expand();
+    else collapse();
+  });
+  more?.addEventListener('click', expand);
+  less?.addEventListener('click', collapse);
+
+  box.appendChild(card);
+  box.scrollTop = box.scrollHeight;
+  return card;
+}
+
+function updateActivityCard(card, { input, output, done } = {}) {
+  if (!card) return;
+  if (done) {
+    card.classList.add('is-done');
+    card.classList.remove('is-running');
+  }
+  if (input != null) {
+    let block = card.querySelector('.activity-block input-block');
+  }
+  if (output) {
+    let outPre = null;
+    card.querySelectorAll('.activity-block').forEach((b) => {
+      if (b.querySelector('.activity-label')?.textContent === 'Output') outPre = b.querySelector('pre');
+    });
+    if (outPre) outPre.textContent = output;
+    else {
+      const body = card.querySelector('.activity-body');
+      if (body) {
+        const div = document.createElement('div');
+        div.className = 'activity-block';
+        div.innerHTML = `<div class="activity-label">Output</div><pre></pre>`;
+        div.querySelector('pre').textContent = output;
+        body.insertBefore(div, body.querySelector('.activity-show-less'));
+      }
+    }
+    const prev = card.querySelector('.activity-preview');
+    if (prev && !card.classList.contains('is-expanded')) {
+      const short = output.length > 140 ? `${output.slice(0, 140)}…` : output;
+      prev.textContent = short;
+    }
+  }
+}
+
+
 function streamJob(jobId) {
   if (state.stream) {
     try { state.stream.close(); } catch {}
@@ -1486,28 +1618,33 @@ function streamJob(jobId) {
       else if (ev.message) setLiveStatus(ev.message, { live: true });
     } else if (ev.type === 'tool') {
       const name = ev.tool || 'tool';
-      const label = ev.path ? `${name} · ${ev.path}` : name;
-      const key = name + (ev.path || '');
+      const path = ev.path || '';
+      const key = name + path;
+      const kind = classifyTool(name);
+      const title = toolTitle(name, path);
+      const input = typeof ev.input === 'string' ? ev.input : (ev.input ? JSON.stringify(ev.input, null, 2) : '');
+      const output = typeof ev.output === 'string' ? ev.output : (ev.output ? JSON.stringify(ev.output, null, 2) : '');
       let row = toolRows.get(key);
-      const detail = [ev.input, ev.output].filter(Boolean).join('\n---\n').slice(0, 1200);
       if (!row) {
-        row = appendLiveEvent({ title: label, kind: 'tool', detail, done: ev.state === 'completed' || ev.state === 'done', meta: 'tool' });
+        row = appendActivityCard({
+          title,
+          path,
+          kind,
+          input: String(input || '').slice(0, 8000),
+          output: String(output || '').slice(0, 12000),
+          done: ev.state === 'completed' || ev.state === 'done',
+        });
         toolRows.set(key, row);
       } else {
-        row.classList.toggle('is-done', ev.state === 'completed' || ev.state === 'done');
-        row.classList.toggle('is-running', !(ev.state === 'completed' || ev.state === 'done'));
-        const d = row.querySelector('.live-event-detail');
-        if (detail) {
-          if (d) d.textContent = detail;
-          else {
-            const pre = document.createElement('pre');
-            pre.className = 'live-event-detail';
-            pre.textContent = detail;
-            row.querySelector('.live-event-card')?.appendChild(pre);
-          }
-        }
+        updateActivityCard(row, {
+          input: String(input || '').slice(0, 8000),
+          output: String(output || '').slice(0, 12000),
+          done: ev.state === 'completed' || ev.state === 'done',
+        });
       }
-      setLiveStatus(`Running ${name}…`, { live: true });
+      // keep compact live panel in sync lightly
+      appendLiveEvent({ title, kind: 'tool', done: ev.state === 'completed' || ev.state === 'done', meta: path });
+      setLiveStatus(`${title}…`, { live: true });
       appendAgentLog(`tool ${name}`);
     } else if (ev.type === 'verification') {
       renderVerification(ev.verification, ev.repairRound);
@@ -1531,13 +1668,32 @@ function streamJob(jobId) {
         if (mbox) mbox.scrollTop = mbox.scrollHeight;
         saveChatHistory();
       } else if (part.type === 'tool' || part.tool) {
-        const label = part.tool || part.name || 'tool';
-        appendLiveEvent({ title: label, kind: 'tool' });
-        setLiveStatus(`Running ${label}…`, { live: true });
+        const name = part.tool || part.name || 'tool';
+        const path = part.path || part.filename || '';
+        const kind = classifyTool(name);
+        appendActivityCard({
+          title: toolTitle(name, path),
+          path,
+          kind,
+          input: typeof part.input === 'string' ? part.input : (part.input ? JSON.stringify(part.input, null, 2) : ''),
+          output: typeof part.output === 'string' ? part.output : (part.output ? JSON.stringify(part.output, null, 2) : ''),
+          done: part.state === 'completed' || part.state === 'done',
+        });
+        setLiveStatus(`${toolTitle(name, path)}…`, { live: true });
       } else if (part.type === 'reasoning' && part.text) {
-        appendLiveEvent({ title: 'Thinking', kind: 'think', detail: part.text.slice(0, 600) });
+        appendActivityCard({
+          title: 'Reasoning',
+          kind: 'think',
+          reasoning: String(part.text).slice(0, 12000),
+          done: true,
+        });
       } else if (part.type && part.type !== 'text') {
-        appendLiveEvent({ title: part.type + (part.path ? ` · ${part.path}` : ''), kind: 'step' });
+        appendActivityCard({
+          title: part.type,
+          path: part.path || '',
+          kind: 'tool',
+          input: part.text ? String(part.text).slice(0, 4000) : '',
+        });
       }
     } else if (ev.type === 'done') {
       clearInterval(poll);
