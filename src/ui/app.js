@@ -468,7 +468,7 @@ async function checkSession() {
   }
 }
 
-$('#login-form').addEventListener('submit', async (e) => {
+$('#login-form')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   $('#login-error').textContent = '';
   $('#login-btn').disabled = true;
@@ -486,7 +486,7 @@ $('#login-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('#logout-btn').addEventListener('click', async () => {
+$('#logout-btn')?.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   showLogin();
 });
@@ -1152,14 +1152,14 @@ function addMessage(role, text, { html = false, skipSave = false, durationMs = n
 }
 
 // Clear message selection when tapping outside a bubble
-$('#messages').addEventListener('click', (e) => {
+$('#messages')?.addEventListener('click', (e) => {
   if (!e.target.closest('.msg')) {
     document.querySelectorAll('.msg.is-selected').forEach((m) => m.classList.remove('is-selected'));
   }
 });
 
 // Copy-code delegation
-$('#messages').addEventListener('click', (e) => {
+$('#messages')?.addEventListener('click', (e) => {
   const btn = e.target.closest('.copy-code');
   if (!btn) return;
   const pre = btn.closest('.code-block')?.querySelector('pre code');
@@ -1188,7 +1188,7 @@ document.addEventListener('click', (e) => {
   p.focus();
 });
 
-$('#composer').addEventListener('submit', async (e) => {
+$('#composer')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const prompt = $('#prompt').value.trim();
   if (!prompt) {
@@ -1228,7 +1228,7 @@ $('#composer').addEventListener('submit', async (e) => {
 
   try {
     const composerMode = $('#task-mode')?.value || 'build';
-    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select').value || undefined;
+    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select')?.value || undefined;
     const mode = composerMode === 'plan' ? 'thorough' : 'fast';
     const modePrompt = composerMode === 'plan'
       ? `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`
@@ -1253,7 +1253,7 @@ $('#composer').addEventListener('submit', async (e) => {
 });
 
 // Enter to send, Shift+Enter for newline
-$('#prompt').addEventListener('keydown', (e) => {
+$('#prompt')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
     e.preventDefault();
     $('#composer').requestSubmit();
@@ -1800,7 +1800,7 @@ function renderVerification(verification, repairRound) {
   }
 }
 
-$('#cancel-btn').addEventListener('click', async () => {
+$('#cancel-btn')?.addEventListener('click', async () => {
   if (!state.jobId) return;
   const id = state.jobId;
   await api(`/api/agent/tasks/${id}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
@@ -1900,8 +1900,8 @@ $('#appearance-save-btn')?.addEventListener('click', () => {
 
 try { applyAppearance(); updateAccountAvatar(); } catch {}
 
-$('#attach-btn').addEventListener('click', () => $('#attach-input').click());
-$('#attach-input').addEventListener('change', async () => {
+$('#attach-btn')?.addEventListener('click', () => $('#attach-input').click());
+$('#attach-input')?.addEventListener('change', async () => {
   if (!state.workspaceId) return toast('Select a workspace first', 'err');
   const fd = new FormData();
   for (const f of $('#attach-input').files) fd.append('files', f);
@@ -1932,6 +1932,7 @@ function restoreModel() {
 async function loadModels() {
   const sel = $('#model-select');
   const settingsSel = $('#settings-model');
+  if (!sel && !settingsSel) { state.models = []; return; }
   if (!sel) return;
   const seen = new Set();
   state.models = [];
@@ -2011,8 +2012,8 @@ async function loadModels() {
 }
 
 // Sync model selectors + persist preference
-$('#model-select').addEventListener('change', () => {
-  const v = $('#model-select').value;
+$('#model-select')?.addEventListener('change', () => {
+  const v = $('#model-select')?.value;
   persistModel(v);
   const settingsSel = $('#settings-model');
   if (settingsSel && settingsSel.value !== v) settingsSel.value = v;
