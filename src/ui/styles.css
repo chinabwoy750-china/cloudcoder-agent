@@ -2010,3 +2010,170 @@ body.shell-workspace-active #view-chat .composer-wrap {
     z-index: 80 !important;
   }
 }
+
+/* ===== Redesigned sidebar nav ===== */
+.sidebar-nav { margin: 8px 0 12px; }
+.nav-btn.nav-new {
+  background: linear-gradient(135deg, rgba(124,158,255,.16), rgba(167,139,250,.14));
+  color: var(--fg);
+  border: 1px solid rgba(124,158,255,.28);
+  font-weight: 650;
+}
+.nav-btn.nav-new:hover {
+  background: linear-gradient(135deg, rgba(124,158,255,.24), rgba(167,139,250,.2));
+}
+
+.projects-nav-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+.projects-collapse-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.projects-collapse-toggle:hover { color: var(--fg); }
+.projects-chevron {
+  transition: transform .2s ease;
+  opacity: 0.75;
+}
+.projects-collapse-toggle[aria-expanded="false"] .projects-chevron {
+  transform: rotate(-90deg); /* points like > when collapsed; expanded shows v */
+}
+.projects-collapse-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.projects-collapse-body.collapsed {
+  display: none;
+}
+.projects-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+}
+.projects-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.workspace-list {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: min(42vh, 320px);
+}
+.workspace-list li.active {
+  border-color: rgba(124,158,255,.4);
+  background: rgba(124,158,255,.1);
+}
+.see-all-projects-btn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,0.12);
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.see-all-projects-btn:hover {
+  background: rgba(124,158,255,.08);
+  border-style: solid;
+}
+
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.account-avatar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, #7c9eff, #a78bfa);
+  color: #0b1020;
+  font-weight: 800;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.account-avatar-btn:hover { filter: brightness(1.06); }
+
+.account-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.account-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.account-card-row:last-child { border-bottom: 0; }
+.settings-hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 18px 0;
+}
+.danger-title { color: #fb7185; }
+
+/* Appearance themes */
+html[data-theme="light"] body {
+  --bg: #f4f6fb;
+  --bg-2: #ffffff;
+  --bg-3: #eef1f7;
+  --bg-4: #e6eaf3;
+  --fg: #121722;
+  --muted: #5b657a;
+  --muted-2: #7a8499;
+  --line: rgba(15,20,35,0.08);
+  --line-2: rgba(15,20,35,0.14);
+}
+html[data-dashboard-bg="deep"] body.shell-home-active .shell-home,
+html[data-dashboard-bg="deep"] .home-glow {
+  background: radial-gradient(ellipse 80% 50% at 50% 100%, rgba(30,64,175,0.45), transparent 55%), #05060a !important;
+}
+html[data-dashboard-bg="aurora"] .home-glow {
+  background:
+    radial-gradient(ellipse 70% 45% at 20% 90%, rgba(16,185,129,0.35), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 85%, rgba(236,72,153,0.3), transparent 50%),
+    linear-gradient(180deg, #07080c, #0a1020) !important;
+}
+html[data-dashboard-bg="minimal"] .home-glow {
+  background: #0a0b10 !important;
+}

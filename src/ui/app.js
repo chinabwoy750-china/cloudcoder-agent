@@ -708,17 +708,43 @@ function updateComposerState() {
 
 async function refreshWorkspaces() {
   state.workspaces = await api('/api/workspaces').catch(() => []);
+  renderSidebarProjects();
+  if (typeof renderProjectsList === 'function') {
+    try { renderProjectsList(); } catch {}
+  }
+}
+
+function getSidebarProjectFilter() {
+  return String($('#sidebar-projects-search')?.value || '').trim().toLowerCase();
+}
+
+function renderSidebarProjects() {
   const ul = $('#workspace-list');
   if (!ul) return;
+  const q = getSidebarProjectFilter();
+  let list = Array.isArray(state.workspaces) ? [...state.workspaces] : [];
+  if (q) {
+    list = list.filter((w) => String(w.name || w.id).toLowerCase().includes(q));
+  }
+  // Sidebar shows a short list; full list is on Projects page
+  const SIDEBAR_LIMIT = 6;
+  const shown = list.slice(0, SIDEBAR_LIMIT);
   ul.innerHTML = '';
-  for (const w of state.workspaces) {
+  for (const w of shown) {
     const li = document.createElement('li');
-    li.className = 'clickable';
-    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${w.files} files</span>`;
+    li.className = 'clickable' + (w.id === state.workspaceId ? ' active' : '');
+    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${w.files ?? 0} files</span>`;
     li.addEventListener('click', () => selectWorkspace(w.id));
     ul.appendChild(li);
   }
-  if (!state.workspaces.length) ul.innerHTML = '<li class="muted small">No workspaces yet</li>';
+  if (!list.length) {
+    ul.innerHTML = '<li class="muted small">No projects yet</li>';
+  }
+  const seeAll = $('#see-all-projects-btn');
+  if (seeAll) {
+    seeAll.style.display = list.length > SIDEBAR_LIMIT || !q ? '' : (list.length ? '' : 'none');
+    seeAll.textContent = list.length > SIDEBAR_LIMIT ? `See all projects (${list.length})` : 'See all projects';
+  }
 }
 
 function openWorkspaceModal() {
@@ -729,7 +755,7 @@ function openWorkspaceModal() {
   setTimeout(() => $('#workspace-name-input')?.focus(), 20);
 }
 function closeWorkspaceModal() { $('#workspace-modal')?.classList.add('hidden'); }
-$('#new-workspace').addEventListener('click', () => { closeDrawers(); openWorkspaceModal(); });
+$('#new-workspace')?.addEventListener('click', () => { closeDrawers(); openWorkspaceModal(); });
 $('#workspace-cancel')?.addEventListener('click', closeWorkspaceModal);
 $('#workspace-modal')?.addEventListener('click', (e) => { if (e.target.id === 'workspace-modal') closeWorkspaceModal(); });
 $('#workspace-form')?.addEventListener('submit', async (e) => {
@@ -1370,6 +1396,98 @@ $('#cancel-btn').addEventListener('click', async () => {
   resetJobState('cancelled');
 });
 
+/* ---- Sidebar redesign: New / Projects / Account ---- */
+$('#nav-new-btn')?.addEventListener('click', () => {
+  closeDrawers();
+  resetJobState('new-project');
+  state.workspaceId = null;
+  clearMessagesUI();
+  setShell('home');
+  updateComposerState();
+  $('#home-prompt')?.focus();
+});
+
+$('#projects-collapse-toggle')?.addEventListener('click', () => {
+  const body = $('#projects-collapse-body');
+  const btn = $('#projects-collapse-toggle');
+  const section = $('#projects-nav-section');
+  if (!body || !btn) return;
+  const open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  body.classList.toggle('collapsed', !open);
+  section?.classList.toggle('is-collapsed', !open);
+});
+
+$('#sidebar-projects-search')?.addEventListener('input', () => renderSidebarProjects());
+
+$('#see-all-projects-btn')?.addEventListener('click', () => {
+  closeDrawers();
+  setShell('projects');
+  renderProjectsList();
+});
+
+function updateAccountAvatar() {
+  const letter = $('#account-avatar-letter');
+  if (!letter) return;
+  const name = state.authUsername || $('#account-username')?.value || 'A';
+  letter.textContent = String(name).trim().charAt(0).toUpperCase() || 'A';
+}
+
+$('#account-menu-btn')?.addEventListener('click', () => {
+  closeDrawers();
+  setShell('workspace');
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('hidden', v.id !== 'view-settings'));
+  document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active'));
+  const tab = document.querySelector('.settings-tab[data-settings-tab="account"]')
+    || document.querySelector('.settings-tab[data-settings-tab="danger"]');
+  tab?.click();
+  if (typeof loadSiteSettings === 'function') loadSiteSettings();
+  updateAccountAvatar();
+});
+
+$('#logout-btn')?.addEventListener('click', async () => {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+  } catch {}
+  try { localStorage.clear(); } catch {}
+  location.reload();
+});
+
+$('#delete-account-btn')?.addEventListener('click', async () => {
+  if (!confirm('Delete this account session and local data on this device?')) return;
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-CloudCoder-CSRF': '1' } });
+  } catch {}
+  try { localStorage.clear(); } catch {}
+  toast('Account session cleared on this device', 'ok');
+  location.reload();
+});
+
+$('#link-github-btn')?.addEventListener('click', () => {
+  document.querySelector('.settings-tab[data-settings-tab="github"]')?.click();
+  toast('Add your GitHub token under GitHub settings', 'ok');
+});
+
+function applyAppearance() {
+  const theme = localStorage.getItem('um_theme') || 'dark';
+  const bg = localStorage.getItem('um_dashboard_bg') || 'default';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-dashboard-bg', bg);
+  const ts = $('#theme-select'); if (ts) ts.value = theme;
+  const bs = $('#dashboard-bg-select'); if (bs) bs.value = bg;
+}
+
+$('#appearance-save-btn')?.addEventListener('click', () => {
+  const theme = $('#theme-select')?.value || 'dark';
+  const bg = $('#dashboard-bg-select')?.value || 'default';
+  localStorage.setItem('um_theme', theme);
+  localStorage.setItem('um_dashboard_bg', bg);
+  applyAppearance();
+  toast('Appearance saved', 'ok');
+});
+
+try { applyAppearance(); updateAccountAvatar(); } catch {}
+
 $('#attach-btn').addEventListener('click', () => $('#attach-input').click());
 $('#attach-input').addEventListener('change', async () => {
   if (!state.workspaceId) return toast('Select a workspace first', 'err');
@@ -1650,6 +1768,7 @@ $('#visual-save')?.addEventListener('click', async () => {
 async function loadSiteSettings() {
   try {
     const data = await api('/api/settings');
+    if (data?.account?.username) { state.authUsername = data.account.username; updateAccountAvatar(); }
     const p = data.provider || {};
     $('#provider-base-url').value = p.baseURL || '';
     $('#provider-id').value = p.providerId || 'china-gpt';
