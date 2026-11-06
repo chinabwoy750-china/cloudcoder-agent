@@ -2287,21 +2287,45 @@ function isDesktopStudio() {
 }
 
 function setStudioTab(tab) {
-  document.querySelectorAll('.studio-tab').forEach((b) => {
-    b.classList.toggle('active', b.dataset.studioTab === tab);
-  });
+  const label = $('#studio-mode-label');
+  const names = { preview: 'Preview', code: 'Code', files: 'Files' };
+  if (label) label.textContent = names[tab] || 'Preview';
   document.querySelectorAll('.studio-pane').forEach((p) => {
     p.classList.toggle('active', p.dataset.studioPane === tab);
   });
-  const toolbar = $('#studio-preview-toolbar');
-  if (toolbar) toolbar.style.display = tab === 'preview' ? '' : 'none';
+  // device controls only relevant on preview
+  const devices = document.querySelector('.studio-top-actions .device-switch');
+  if (devices) devices.style.opacity = tab === 'preview' ? '1' : '0.35';
+  const foot = $('#studio-foot');
+  if (foot) foot.style.display = tab === 'preview' ? '' : 'none';
   if (tab === 'code') refreshStudioCodeTree().catch(() => {});
   if (tab === 'files') refreshStudioUploads().catch(() => {});
   if (tab === 'preview' && state.workspaceId) loadStudioPreview();
 }
 
-document.querySelectorAll('.studio-tab').forEach((btn) => {
-  btn.addEventListener('click', () => setStudioTab(btn.dataset.studioTab));
+$('#studio-mode-btn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = $('#studio-mode-menu');
+  const btn = $('#studio-mode-btn');
+  if (!menu) return;
+  const open = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !open);
+  btn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+
+$('#studio-mode-menu')?.addEventListener('click', (e) => {
+  const item = e.target.closest('[data-studio-tab]');
+  if (!item) return;
+  setStudioTab(item.dataset.studioTab);
+  $('#studio-mode-menu')?.classList.add('hidden');
+  $('#studio-mode-btn')?.setAttribute('aria-expanded', 'false');
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.studio-mode')) {
+    $('#studio-mode-menu')?.classList.add('hidden');
+    $('#studio-mode-btn')?.setAttribute('aria-expanded', 'false');
+  }
 });
 
 document.querySelectorAll('.device-btn').forEach((btn) => {
