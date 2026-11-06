@@ -31,8 +31,28 @@ const state = {
   shell: 'home',
   menuWorkspaceId: null,
   authUsername: '',
+  jobStartedAt: null,
+  lastJobDurationMs: null,
   submitting: false,
 };
+
+function aiProjectName(prompt) {
+  const stop = new Set(['a','an','the','for','my','me','to','and','or','with','on','in','of','build','create','make','please','website','web','app','project','site']);
+  const words = String(prompt || '')
+    .replace(/[^a-zA-Z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((w) => !stop.has(w.toLowerCase()))
+    .slice(0, 4);
+  if (!words.length) return 'New project';
+  const titled = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  return titled.slice(0, 42);
+}
+
+function setProjectTitle(name) {
+  const el = $('#project-title');
+  if (el) el.textContent = name || 'Project';
+}
 
 function resetJobState(reason = '') {
   if (state.stream) {
@@ -685,7 +705,8 @@ function updateComposerState() {
   const app = $('#app');
   if (app) app.classList.toggle('home-mode', !hasWs && !state.previewOpen);
   const projectTitle = $('#project-title');
-  if (projectTitle) projectTitle.textContent = hasWs ? (state.workspaces.find((w) => w.id === state.workspaceId)?.name || 'Project') : 'Universal Modder';
+  if (projectTitle) projectTitle.textContent = hasWs ? (state.workspaces.find((w) => w.id === state.workspaceId)?.name || 'Project') : 'Project';
+  setProjectTitle(hasWs ? (state.workspaces.find((w) => w.id === state.workspaceId)?.name || 'Project') : 'Project');
   if (emptyTitle && emptyCopy && !hasWs) {
     emptyTitle.textContent = "What's on your mind?";
     emptyCopy.textContent = 'Describe the website or web app you want to create.';
@@ -784,6 +805,8 @@ async function selectWorkspace(id) {
   resetJobState('workspace-switch');
   setShell('workspace');
   await loadChatHistory(id);
+  const ws = state.workspaces.find((w) => w.id === id);
+  setProjectTitle(ws?.name || 'Project');
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
   const selectedMeta = state.workspaces.find((w) => w.id === id);
@@ -976,47 +999,69 @@ function hideEmptyState() {
   if (es) es.classList.add('hidden');
 }
 
-function addMessage(role, text, { html = false, skipSave = false } = {}) {
+function addMessage(role, text, { html = false, skipSave = false, durationMs = null } = {}) {
   const empty = $('#empty-state');
   if (empty) empty.classList.add('hidden');
   const wrap = document.createElement('div');
   wrap.className = `msg ${role}`;
+  if (durationMs != null) wrap.dataset.durationMs = String(durationMs);
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   if (html) bubble.innerHTML = text;
   else if (role === 'agent') bubble.innerHTML = renderMarkdown(text);
   else bubble.textContent = text;
   wrap.appendChild(bubble);
-  if (role === 'user' || role === 'agent') {
+
+  if (role === 'agent' || role === 'user') {
     const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'msg-copy-btn';
-    copyBtn.textContent = 'Copy';
-    copyBtn.title = 'Copy message';
-    copyBtn.addEventListener('click', async (ev) => {
-      ev.stopPropagation();
-      const plain = bubble.innerText || bubble.textContent || '';
-      try {
-        await navigator.clipboard.writeText(plain);
-        copyBtn.textContent = 'Copied';
-        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
-      } catch {
-        toast('Could not copy', 'err');
-      }
-    });
-    actions.appendChild(copyBtn);
-    wrap.appendChild(actions);
-    bubble.addEventListener('click', (ev) => {
-      // Tap bubble to reveal copy under the response
-      if (ev.target.closest('a, button, .copy-code')) return;
-      document.querySelectorAll('.msg.is-selected').forEach((m) => {
-        if (m !== wrap) m.classList.remove('is-selected');
+    actions.className = 'msg-toolbar';
+    const mkBtn = (label, svg, cls = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `msg-tool-btn ${cls}`.trim();
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.innerHTML = svg;
+      return b;
+    };
+    const copySvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    const upSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10v12M15 5.88L14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7"/></svg>';
+    const downSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 14V2M9 18.12L10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17"/></svg>';
+    const moreSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+
+    if (role === 'agent') {
+      const copyBtn = mkBtn('Copy', copySvg);
+      copyBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(bubble.innerText || '');
+          toast('Copied', 'ok');
+        } catch { toast('Could not copy', 'err'); }
       });
-      wrap.classList.toggle('is-selected');
-    });
+      const up = mkBtn('Good response', upSvg);
+      const down = mkBtn('Bad response', downSvg);
+      up.addEventListener('click', (ev) => { ev.stopPropagation(); up.classList.toggle('active'); down.classList.remove('active'); toast('Thanks for the feedback', 'ok'); });
+      down.addEventListener('click', (ev) => { ev.stopPropagation(); down.classList.toggle('active'); up.classList.remove('active'); toast('Thanks for the feedback', 'ok'); });
+      const more = mkBtn('More', moreSvg, 'msg-more-btn');
+      more.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        openMsgMenu(more, wrap);
+      });
+      actions.append(copyBtn, up, down, more);
+    } else {
+      const copyBtn = mkBtn('Copy', copySvg);
+      copyBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(bubble.innerText || '');
+          toast('Copied', 'ok');
+        } catch { toast('Could not copy', 'err'); }
+      });
+      actions.append(copyBtn);
+    }
+    wrap.appendChild(actions);
   }
+
   $('#messages').appendChild(wrap);
   const mbox = $('#messages');
   if (mbox) mbox.scrollTop = mbox.scrollHeight;
@@ -1082,7 +1127,7 @@ $('#composer').addEventListener('submit', async (e) => {
     try {
       const created = await api('/api/workspaces', {
         method: 'POST',
-        body: JSON.stringify({ name: prompt.slice(0, 48).replace(/\s+/g, ' ').trim() || 'New project' }),
+        body: JSON.stringify({ name: aiProjectName(prompt) }),
       });
       await refreshWorkspaces();
       await selectWorkspace(created.workspaceId);
@@ -1097,6 +1142,7 @@ $('#composer').addEventListener('submit', async (e) => {
   $('#prompt').value = '';
   autoGrow();
   state.jobId = 'pending';
+  state.jobStartedAt = Date.now();
   updateComposerState();
 
   try {
@@ -1133,6 +1179,108 @@ $('#prompt').addEventListener('keydown', (e) => {
   }
 });
 
+
+function formatDuration(ms) {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return 'Worked for —';
+  const total = Math.round(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (m <= 0) return `Worked for ${s}s`;
+  return `Worked for ${m}m ${s}s`;
+}
+
+function openMsgMenu(anchor, msgEl) {
+  const menu = $('#msg-menu');
+  if (!menu || !anchor) return;
+  const ms = Number(msgEl?.dataset?.durationMs || state.lastJobDurationMs || 0) || null;
+  const dur = $('#msg-menu-duration');
+  if (dur) dur.textContent = formatDuration(ms);
+  menu.classList.remove('hidden');
+  const r = anchor.getBoundingClientRect();
+  const mw = 180;
+  let left = Math.min(window.innerWidth - mw - 8, Math.max(8, r.right - mw));
+  let top = r.bottom + 6;
+  if (top + 120 > window.innerHeight) top = Math.max(8, r.top - 120);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.dataset.target = '1';
+}
+
+function closeMsgMenu() {
+  $('#msg-menu')?.classList.add('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#msg-menu') && !e.target.closest('.msg-more-btn')) closeMsgMenu();
+});
+
+$('#msg-menu')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-msg-action]');
+  if (!btn) return;
+  const action = btn.getAttribute('data-msg-action');
+  closeMsgMenu();
+  if (action === 'preview') openPreview();
+});
+
+function extractFollowups(text) {
+  const src = String(text || '');
+  const ideas = [];
+  // simple heuristics from agent text
+  const lines = src.split(/[\n\.]/).map((s) => s.trim()).filter((s) => s.length > 12 && s.length < 60);
+  for (const line of lines) {
+    if (/^(you can|try|next|also|consider|add|update|improve)/i.test(line)) {
+      ideas.push(line.replace(/^you can\s+/i, '').replace(/^try\s+/i, ''));
+    }
+    if (ideas.length >= 4) break;
+  }
+  if (!ideas.length) {
+    ideas.push('Refine the design', 'Add mobile polish', 'Improve page content', 'Prepare for publish');
+  }
+  return ideas.slice(0, 4);
+}
+
+function renderFollowups(fromText) {
+  const row = $('#followup-suggestions');
+  if (!row) return;
+  const ideas = extractFollowups(fromText);
+  row.innerHTML = '';
+  if (!ideas.length) {
+    row.classList.add('hidden');
+    return;
+  }
+  row.classList.remove('hidden');
+  for (const idea of ideas) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'followup-chip';
+    b.textContent = idea;
+    b.addEventListener('click', () => {
+      const p = $('#prompt');
+      if (!p) return;
+      p.value = idea;
+      autoGrow();
+      updateComposerState();
+      $('#composer')?.requestSubmit();
+    });
+    row.appendChild(b);
+  }
+}
+
+$('#workspace-home-btn')?.addEventListener('click', () => {
+  closeDrawers();
+  resetJobState('home');
+  state.workspaceId = null;
+  setShell('home');
+  updateComposerState();
+});
+
+$('#project-title-btn')?.addEventListener('click', () => {
+  // soft affordance — open projects list
+  setShell('projects');
+  renderProjectsList();
+});
+
+
 function streamJob(jobId) {
   if (state.stream) {
     try { state.stream.close(); } catch {}
@@ -1149,12 +1297,18 @@ function streamJob(jobId) {
   let errorCount = 0;
   resetAgentActivity();
   resetAgentLive();
+  const fu = $('#followup-suggestions'); if (fu) { fu.classList.add('hidden'); fu.innerHTML = ''; }
   appendLiveEvent({ title: 'Agent session opened', kind: 'step', done: true });
   updateComposerState();
 
   const finishClient = (ok, errorText) => {
     if (finished) return;
     finished = true;
+    if (state.jobStartedAt) {
+      state.lastJobDurationMs = Date.now() - state.jobStartedAt;
+      state.jobStartedAt = null;
+    }
+
     stopStatusPhrases();
     setLiveStatus(ok ? 'Completed' : `Failed — ${errorText || 'stopped'}`, { live: false });
     document.querySelectorAll('#agent-live-track .live-event.is-running').forEach((n) => {
@@ -1168,6 +1322,15 @@ function streamJob(jobId) {
       detail: errorText || '',
     });
     addMessage('tool', ok ? '✅ Task completed' : `❌ ${errorText || 'Task failed'}`);
+    // stamp duration on last agent message
+    const agents = document.querySelectorAll('#messages .msg.agent');
+    const lastAgent = agents[agents.length - 1];
+    if (lastAgent && state.lastJobDurationMs != null) {
+      lastAgent.dataset.durationMs = String(state.lastJobDurationMs);
+    }
+    if (ok && agentRaw) renderFollowups(agentRaw);
+    else if (ok) renderFollowups('');
+
     setAgentStatus(ok ? 'Completed' : `Failed: ${errorText || ''}`);
     try { es.close(); } catch {}
     state.stream = null;
