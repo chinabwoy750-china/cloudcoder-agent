@@ -396,7 +396,7 @@ $('#project-menu')?.addEventListener('click', async (e) => {
 });
 
 async function createProjectAndRun(prompt, mode = 'build') {
-  const name = String(prompt).trim().slice(0, 48) || 'Untitled project';
+  const name = aiProjectName(prompt);
   const res = await api('/api/workspaces', { method: 'POST', body: JSON.stringify({ name }) });
   const id = res.workspaceId || res.id;
   if (!id) throw new Error('Could not create project');
