@@ -30,6 +30,7 @@ const state = {
   modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
   shell: 'home',
   menuWorkspaceId: null,
+  authUsername: '',
   submitting: false,
 };
 
