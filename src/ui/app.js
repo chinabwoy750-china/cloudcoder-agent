@@ -651,6 +651,90 @@ function openInspector() {
   document.body.classList.add('drawer-open');
 }
 $('#menu-btn')?.addEventListener('click', openSidebar);
+
+/* ---------------- Mobile swipe: left = nav, right = preview ---------------- */
+(function setupWorkspaceSwipes() {
+  const THRESH = 64;
+  const MAX_VERTICAL = 48;
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  let edgeOnly = false;
+
+  function targetEl() {
+    return $('#shell-workspace') || $('#view-chat') || document.body;
+  }
+
+  function onStart(e) {
+    if (state.shell !== 'workspace') return;
+    if (window.matchMedia && !window.matchMedia('(max-width: 900px)').matches) return;
+    // Don't fight inputs / drawers already open
+    if (e.target.closest('input, textarea, select, button, a, .composer, .sidebar, .inspector, .preview-view, .msg-menu')) return;
+    if ($('#sidebar')?.classList.contains('open') || $('#inspector')?.classList.contains('open')) return;
+    const t = e.touches?.[0];
+    if (!t) return;
+    startX = t.clientX;
+    startY = t.clientY;
+    tracking = true;
+    // Prefer edge swipe for opening nav (feels native); allow full-width for preview too
+    edgeOnly = startX < 28;
+  }
+
+  function onMove(e) {
+    if (!tracking) return;
+    const t = e.touches?.[0];
+    if (!t) return;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    // If user is clearly scrolling vertically, cancel swipe
+    if (Math.abs(dy) > MAX_VERTICAL && Math.abs(dy) > Math.abs(dx)) {
+      tracking = false;
+    }
+  }
+
+  function onEnd(e) {
+    if (!tracking) return;
+    tracking = false;
+    if (state.shell !== 'workspace') return;
+    const t = e.changedTouches?.[0];
+    if (!t) return;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dy) > MAX_VERTICAL) return;
+    if (Math.abs(dx) < THRESH) return;
+
+    // Swipe left → navigation sidebar
+    if (dx < -THRESH) {
+      if (state.previewOpen) {
+        closePreview();
+        return;
+      }
+      openSidebar();
+      return;
+    }
+    // Swipe right → preview (or close sidebar if open — handled above)
+    if (dx > THRESH) {
+      if ($('#sidebar')?.classList.contains('open')) {
+        closeDrawers();
+        return;
+      }
+      // From left edge, swipe right can also mean "open nav" on some apps;
+      // user asked: right = preview, left = nav.
+      if (!state.workspaceId) {
+        toast('Open a project to use preview', 'err');
+        return;
+      }
+      openPreview();
+    }
+  }
+
+  const el = document;
+  el.addEventListener('touchstart', onStart, { passive: true });
+  el.addEventListener('touchmove', onMove, { passive: true });
+  el.addEventListener('touchend', onEnd, { passive: true });
+})();
+
+
 $('#sidebar-close')?.addEventListener('click', closeDrawers);
 $('#inspector-btn')?.addEventListener('click', openInspector);
 $('#inspector-close')?.addEventListener('click', closeDrawers);
