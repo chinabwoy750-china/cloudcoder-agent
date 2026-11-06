@@ -42,7 +42,7 @@ export function createApp() {
   app.get('/ready', readinessHandler);
 
   // Global rate limit on the authenticated surface
-  app.use(rateLimitMiddleware({ windowMs: 60000, max: 600 }));
+  app.use(rateLimitMiddleware({ windowMs: 60000, max: 3000 }));
 
   // Login / logout / me
   app.use('/api/auth', authRouter());

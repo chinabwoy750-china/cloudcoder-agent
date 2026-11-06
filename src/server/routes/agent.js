@@ -23,7 +23,7 @@ export function agentRouter() {
 
   router.post(
     '/tasks',
-    rateLimitMiddleware({ windowMs: 60000, max: 20 }),
+    rateLimitMiddleware({ windowMs: 60000, max: 120 }),
     (req, res, next) => {
       const { workspaceId, prompt, model } = req.body || {};
       const mode = req.body?.mode === 'plan' ? 'plan' : 'build';

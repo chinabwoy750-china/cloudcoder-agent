@@ -26,7 +26,7 @@ export function authRouter() {
 
   router.post(
     '/login',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 20 }),
+    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 60 }),
     async (req, res, next) => {
       try {
         const { username, password } = req.body || {};
@@ -67,7 +67,7 @@ export function authRouter() {
   // Controlled registration: disabled by default; admin can enable.
   router.post(
     '/register',
-    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 10 }),
+    rateLimitMiddleware({ windowMs: 15 * 60 * 1000, max: 30 }),
     async (req, res, next) => {
       try {
         if (!isPostgresConfigured()) {

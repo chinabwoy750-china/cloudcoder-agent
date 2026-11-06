@@ -14,7 +14,13 @@ const api = async (path, opts = {}) => {
   const text = await res.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 429) {
+      const wait = data?.retryAfterSec || res.headers.get('Retry-After') || 30;
+      throw new Error(data?.error || `Too many requests — wait ${wait}s and try again`);
+    }
+    throw new Error(data?.error || `HTTP ${res.status}`);
+  }
   return data;
 };
 
