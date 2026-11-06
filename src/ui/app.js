@@ -2669,3 +2669,64 @@ $('#studio-publish-btn')?.addEventListener('click', () => {
 })();
 
 // When entering workspace on desktop, default studio to preview
+
+
+/* ---- Mode dropdown (Build / Plan) ---- */
+function wireModeDropdown(btnId, menuId, selectId, labelId) {
+  const btn = document.getElementById(btnId);
+  const menu = document.getElementById(menuId);
+  const select = document.getElementById(selectId);
+  const label = document.getElementById(labelId);
+  if (!btn || !menu || !select) return;
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const open = menu.classList.contains('hidden');
+    document.querySelectorAll('.mode-dropdown-menu').forEach((m) => m.classList.add('hidden'));
+    document.querySelectorAll('.mode-dropdown-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    if (open) {
+      menu.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+  menu.querySelectorAll('[data-mode]').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const mode = item.getAttribute('data-mode') || 'build';
+      select.value = mode;
+      if (label) label.textContent = mode === 'plan' ? 'Plan' : 'Build';
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+}
+wireModeDropdown('mode-btn', 'mode-menu', 'task-mode', 'mode-label');
+wireModeDropdown('home-mode-btn', 'home-mode-menu', 'home-task-mode', 'home-mode-label');
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.mode-dropdown')) {
+    document.querySelectorAll('.mode-dropdown-menu').forEach((m) => m.classList.add('hidden'));
+    document.querySelectorAll('.mode-dropdown-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  }
+});
+
+$('#nav-search-btn')?.addEventListener('click', () => {
+  const row = $('#projects-search-row');
+  if (!row) return;
+  row.classList.toggle('hidden');
+  if (!row.classList.contains('hidden')) {
+    $('#projects-collapse-body')?.classList.remove('collapsed');
+    $('#projects-collapse-toggle')?.setAttribute('aria-expanded', 'true');
+    $('#sidebar-projects-search')?.focus();
+  }
+});
+
+$('#preview-back-chat')?.addEventListener('click', () => closePreview());
+$('#preview-bar-publish')?.addEventListener('click', () => {
+  if (!state.workspaceId) return toast('Open a project first', 'err');
+  window.open(`/api/workspaces/${state.workspaceId}/zip`, '_blank');
+  toast('Downloading project ZIP', 'ok');
+});
+$('#preview-bar-more')?.addEventListener('click', () => {
+  toast('More preview actions coming soon', 'ok');
+});
