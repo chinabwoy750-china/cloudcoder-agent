@@ -3254,3 +3254,164 @@ html[data-dashboard-bg="minimal"] .home-glow {
   }
   .preview-mobile-bar { display: none !important; }
 }
+
+/* ===== AUTHORITATIVE desktop workspace: nav | chat | preview ===== */
+@media (min-width: 901px) {
+  body.shell-workspace-active .app {
+    display: grid !important;
+    grid-template-columns:
+      var(--nav-w, 260px)
+      6px
+      minmax(360px, 1fr)
+      6px
+      var(--studio-w, 42vw) !important;
+    grid-template-rows: 1fr !important;
+    height: 100dvh !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    background: #090a0e !important;
+    padding: 0 !important;
+  }
+
+  /* Promote shell children into the app grid */
+  body.shell-workspace-active #shell-workspace {
+    display: contents !important;
+  }
+
+  /* Hide everything that must NOT take a grid track */
+  body.shell-workspace-active .inspector,
+  body.shell-workspace-active #inspector,
+  body.shell-workspace-active .bottom-nav,
+  body.shell-workspace-active #bottom-nav {
+    display: none !important;
+  }
+
+  /* Column 1 — navigation */
+  body.shell-workspace-active .sidebar {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    position: relative !important;
+    inset: auto !important;
+    transform: none !important;
+    width: auto !important;
+    height: 100% !important;
+    max-height: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: auto !important;
+    z-index: 3 !important;
+    background: #10131a !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
+    box-shadow: none !important;
+  }
+
+  /* Column 2 — nav resizer */
+  body.shell-workspace-active #resizer-nav {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    display: block !important;
+    width: 6px !important;
+    min-width: 6px !important;
+    cursor: col-resize !important;
+    z-index: 5 !important;
+  }
+
+  /* Column 3 — editing / chat (THE missing middle page) */
+  body.shell-workspace-active .main {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 320px !important;
+    width: auto !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    position: relative !important;
+    z-index: 2 !important;
+    background: #0c0e14 !important;
+    border: 0 !important;
+  }
+
+  body.shell-workspace-active .workspace-topbar {
+    display: flex !important;
+    flex: 0 0 52px !important;
+    height: 52px !important;
+    align-items: center !important;
+    background: #0c0e14 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+  }
+  body.shell-workspace-active .workspace-topbar .topbar-x { display: none !important; }
+  body.shell-workspace-active .preview-toggle { display: none !important; }
+
+  body.shell-workspace-active #view-chat {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #view-chat.hidden {
+    display: flex !important; /* never hide chat on desktop workspace */
+  }
+
+  body.shell-workspace-active .messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding: 18px 22px 10px !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  body.shell-workspace-active .composer-wrap {
+    flex: 0 0 auto !important;
+    padding: 8px 16px 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* Mobile preview overlay stays off on desktop */
+  body.shell-workspace-active #preview-view {
+    display: none !important;
+  }
+
+  /* Column 4 — studio resizer */
+  body.shell-workspace-active #resizer-studio {
+    grid-column: 4 !important;
+    grid-row: 1 !important;
+    display: block !important;
+    width: 6px !important;
+    min-width: 6px !important;
+    cursor: col-resize !important;
+    z-index: 5 !important;
+  }
+
+  /* Column 5 — live preview / code / files */
+  body.shell-workspace-active .studio-panel,
+  body.shell-workspace-active #studio-panel {
+    grid-column: 5 !important;
+    grid-row: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-width: 280px !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    z-index: 2 !important;
+  }
+
+  body.shell-workspace-active .studio-glass {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  body.shell-workspace-active .studio-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+}

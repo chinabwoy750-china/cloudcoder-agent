@@ -887,6 +887,13 @@ async function selectWorkspace(id) {
   await loadChatHistory(id);
   const ws = state.workspaces.find((w) => w.id === id);
   setProjectTitle(ws?.name || 'Project');
+  // Desktop: always show the middle editing (chat) column
+  document.querySelectorAll('#shell-workspace .view').forEach((v) => {
+    v.classList.toggle('hidden', v.id !== 'view-chat');
+  });
+  const chat = document.getElementById('view-chat');
+  if (chat) chat.classList.remove('hidden');
+
   if (isDesktopStudio()) { setStudioTab('preview'); loadStudioPreview(); }
   state.workspaceId = id;
   const wsPill = $('#ws-pill');
