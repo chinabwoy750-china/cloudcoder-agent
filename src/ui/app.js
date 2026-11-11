@@ -254,7 +254,8 @@ function updateEmptyStateVisibility() {
 
 
 
-/* ---- Force workspace panes via injected stylesheet ---- */
+
+/* ---- Workspace layout: simple flex, full viewport ---- */
 function layoutWorkspacePanes() {
   let tag = document.getElementById('um-force-layout');
   if (!tag) {
@@ -262,38 +263,25 @@ function layoutWorkspacePanes() {
     tag.id = 'um-force-layout';
     document.head.appendChild(tag);
   }
-
   if (state.shell !== 'workspace') {
     tag.textContent = '';
     return;
   }
 
-  // Prefer visual viewport full size; never lock html to a smaller box
   const w = Math.max(
     320,
     window.visualViewport?.width || 0,
     window.innerWidth || 0,
     document.documentElement.clientWidth || 0
   );
-  const h = Math.max(
-    480,
-    window.visualViewport?.height || 0,
-    window.innerHeight || 0,
-    document.documentElement.clientHeight || 0
-  );
-
-  // Desktop three-pane whenever width is usable; mobile is single column
-  const desktop = w >= 800;
+  const desktop = w >= 900;
 
   if (!desktop) {
     tag.textContent = `
-      html, body, body.shell-workspace-active #app {
+      html, body, #app {
         width: 100% !important;
-        max-width: 100% !important;
         height: 100% !important;
-        height: 100dvh !important;
         margin: 0 !important;
-        padding: 0 !important;
         overflow: hidden !important;
         background: #08090d !important;
       }
@@ -306,49 +294,29 @@ function layoutWorkspacePanes() {
         overflow: hidden !important;
       }
       body.shell-workspace-active #shell-workspace > .main {
-        position: relative !important;
-        left: auto !important;
-        right: auto !important;
-        width: 100% !important;
         flex: 1 1 auto !important;
+        width: 100% !important;
         min-height: 0 !important;
         display: flex !important;
         flex-direction: column !important;
+        position: relative !important;
         overflow: hidden !important;
       }
-      /* Nav drawer on mobile — hidden until .open */
       body.shell-workspace-active #shell-workspace > .sidebar {
         position: fixed !important;
-        left: 0 !important;
-        top: 0 !important;
-        bottom: 0 !important;
+        left: 0 !important; top: 0 !important; bottom: 0 !important;
         width: min(300px, 86vw) !important;
         height: 100% !important;
-        max-height: none !important;
-        display: flex !important;
-        flex-direction: column !important;
         transform: translateX(-105%) !important;
         transition: transform .24s cubic-bezier(.32,.72,0,1) !important;
         z-index: 90 !important;
+        display: flex !important;
+        flex-direction: column !important;
         background: #10131a !important;
-        box-shadow: none !important;
-        overflow: auto !important;
       }
       body.shell-workspace-active #shell-workspace > .sidebar.open {
         transform: translateX(0) !important;
         box-shadow: 12px 0 40px rgba(0,0,0,.55) !important;
-      }
-      body.shell-workspace-active #scrim.visible {
-        display: block !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        z-index: 80 !important;
-      }
-      body.shell-workspace-active #workspace-menu-btn,
-      body.shell-workspace-active .workspace-menu-btn {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
       }
       body.shell-workspace-active #shell-workspace > #studio-panel,
       body.shell-workspace-active #shell-workspace > .studio-panel,
@@ -365,92 +333,102 @@ function layoutWorkspacePanes() {
         min-height: 0 !important;
         height: 100% !important;
       }
+      body.shell-workspace-active #workspace-menu-btn {
+        display: inline-flex !important;
+      }
       body.shell-workspace-active #bottom-nav { display: none !important; }
+      body.shell-workspace-active #scrim.visible {
+        display: block !important;
+        z-index: 80 !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+      }
     `;
     return;
   }
 
-  const navW = Math.min(280, Math.max(220, Math.round(w * 0.16)));
-  const gap = 6;
-  const rest = w - navW - gap * 2;
-  const chatW = Math.round(rest * 0.38);
-  const prevW = rest - chatW;
-  const chatLeft = navW + gap;
-  const prevLeft = chatLeft + chatW + gap;
-
+  /* DESKTOP: horizontal flex — nav | chat | preview filling 100% */
   tag.textContent = `
-    html, body, body.shell-workspace-active #app {
+    html, body, #app {
       width: 100% !important;
       max-width: none !important;
       height: 100% !important;
-      height: 100dvh !important;
       margin: 0 !important;
       padding: 0 !important;
       overflow: hidden !important;
       background: #08090d !important;
     }
-    body.shell-workspace-active #shell-workspace {
+    body.shell-workspace-active #app {
       display: block !important;
-      position: relative !important;
-      width: 100% !important;
-      max-width: none !important;
+    }
+    body.shell-workspace-active #shell-workspace {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: stretch !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
       height: 100dvh !important;
       overflow: hidden !important;
       margin: 0 !important;
       padding: 0 !important;
-    }
-    body.shell-workspace-active #inspector,
-    body.shell-workspace-active #bottom-nav {
-      display: none !important;
+      gap: 0 !important;
     }
     body.shell-workspace-active #shell-workspace > .sidebar {
-      position: absolute !important;
-      left: 0 !important; top: 0 !important; bottom: 0 !important;
-      width: ${navW}px !important;
+      flex: 0 0 260px !important;
+      width: 260px !important;
+      max-width: 260px !important;
       height: 100% !important;
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      transform: none !important;
       display: flex !important;
       flex-direction: column !important;
-      transform: none !important;
-      z-index: 5 !important;
       overflow: auto !important;
       background: #10131a !important;
-    }
-    body.shell-workspace-active #resizer-nav {
-      position: absolute !important;
-      left: ${navW}px !important; top: 0 !important; bottom: 0 !important;
-      width: ${gap}px !important;
-      display: block !important;
-      z-index: 6 !important;
+      border-right: 1px solid rgba(255,255,255,0.08) !important;
+      z-index: 2 !important;
     }
     body.shell-workspace-active #shell-workspace > .main {
-      position: absolute !important;
-      left: ${chatLeft}px !important; top: 0 !important; bottom: 0 !important;
-      width: ${chatW}px !important;
+      flex: 1 1 38% !important;
+      min-width: 280px !important;
+      max-width: none !important;
       height: 100% !important;
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      right: auto !important;
       display: flex !important;
       flex-direction: column !important;
       overflow: hidden !important;
-      z-index: 4 !important;
       background: #0c0e14 !important;
-    }
-    body.shell-workspace-active #resizer-studio {
-      position: absolute !important;
-      left: ${chatLeft + chatW}px !important; top: 0 !important; bottom: 0 !important;
-      width: ${gap}px !important;
-      display: block !important;
-      z-index: 6 !important;
+      border-right: 1px solid rgba(255,255,255,0.06) !important;
+      z-index: 1 !important;
     }
     body.shell-workspace-active #shell-workspace > #studio-panel,
     body.shell-workspace-active #shell-workspace > .studio-panel {
-      position: absolute !important;
-      left: ${prevLeft}px !important; top: 0 !important; bottom: 0 !important;
-      width: ${prevW}px !important;
+      flex: 1 1 52% !important;
+      min-width: 320px !important;
+      max-width: none !important;
       height: 100% !important;
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      right: auto !important;
       display: flex !important;
       flex-direction: column !important;
       overflow: hidden !important;
-      z-index: 4 !important;
       background: #0a0c12 !important;
+      z-index: 1 !important;
+    }
+    body.shell-workspace-active #resizer-nav,
+    body.shell-workspace-active #resizer-studio,
+    body.shell-workspace-active #inspector,
+    body.shell-workspace-active #bottom-nav,
+    body.shell-workspace-active #workspace-menu-btn,
+    body.shell-workspace-active #preview-view {
+      display: none !important;
     }
     body.shell-workspace-active #view-chat,
     body.shell-workspace-active #view-chat.hidden {
@@ -460,17 +438,17 @@ function layoutWorkspacePanes() {
       min-height: 0 !important;
       height: 100% !important;
     }
-    body.shell-workspace-active #preview-view { display: none !important; }
     body.shell-workspace-active .studio-glass {
       display: flex !important;
       flex-direction: column !important;
+      flex: 1 1 auto !important;
       height: 100% !important;
       min-height: 0 !important;
     }
     body.shell-workspace-active .studio-body {
       flex: 1 1 auto !important;
       min-height: 0 !important;
-    }
+      }
   `;
 }
 
@@ -492,6 +470,9 @@ function setShell(name) {
     btn.classList.toggle('active', btn.dataset.shell === name);
   });
   requestAnimationFrame(() => layoutWorkspacePanes());
+  setTimeout(() => layoutWorkspacePanes(), 50);
+  setTimeout(() => layoutWorkspacePanes(), 300);
+
 
   // Preview / inspector only belong to workspace shell
   document.querySelectorAll('.workspace-only').forEach((el) => {

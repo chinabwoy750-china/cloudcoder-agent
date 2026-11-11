@@ -4022,3 +4022,46 @@ html[data-dashboard-bg="minimal"] .home-glow {
 @media (min-width: 901px) {
   #workspace-menu-btn { display: none !important; }
 }
+
+/* ===== FINAL FLEX WORKSPACE (permanent, not only injected) ===== */
+@media (min-width: 900px) {
+  body.shell-workspace-active #shell-workspace {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace > .sidebar {
+    flex: 0 0 260px !important;
+    position: relative !important;
+    transform: none !important;
+    height: 100% !important;
+    display: flex !important;
+  }
+  body.shell-workspace-active #shell-workspace > .main {
+    flex: 1 1 38% !important;
+    min-width: 280px !important;
+    height: 100% !important;
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace > #studio-panel,
+  body.shell-workspace-active #shell-workspace > .studio-panel {
+    flex: 1 1 52% !important;
+    min-width: 320px !important;
+    height: 100% !important;
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace > #inspector,
+  body.shell-workspace-active #resizer-nav,
+  body.shell-workspace-active #resizer-studio {
+    display: none !important;
+  }
+}
