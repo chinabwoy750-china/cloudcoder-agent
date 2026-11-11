@@ -61,10 +61,18 @@ export function buildRepairPrompt(verification) {
   return lines.join('\n');
 }
 
-async function promptSession({ sessionId, directory, text, model }) {
+async function promptSession({ sessionId, directory, text, model, variant }) {
   const body = { parts: [{ type: 'text', text }], directory };
   const m = splitModel(model || config.agent.defaultModel);
-  if (m) body.model = m;
+  if (m) {
+    const resolvedVariant = (variant && String(variant).trim()) || m.variant || undefined;
+    body.model = { providerID: m.providerID, modelID: m.modelID };
+    if (resolvedVariant) {
+      body.variant = resolvedVariant;
+      // Some OpenCode builds only honor #variant on modelID
+      body.model.modelID = `${m.modelID}#${resolvedVariant}`;
+    }
+  }
   await oc('POST', `/session/${sessionId}/prompt_async`, {
     query: { directory },
     body,
@@ -152,6 +160,7 @@ export async function runAgentTask({
   directory,
   prompt,
   model,
+  variant,
   mode = 'build',
   onEvent = () => {},
   signal,
@@ -180,7 +189,11 @@ export async function runAgentTask({
   const finalPrompt = buildTaskPrompt(prompt, safeMode, planOn) + pathHint;
 
   const m = splitModel(model || config.agent.defaultModel);
-  logger.info(`Agent task mode=${safeMode} model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'} planThenAct=${planOn}`);
+  const resolvedVariant = (variant && String(variant).trim()) || m?.variant || '';
+  logger.info(
+    `Agent task mode=${safeMode} model=${m ? m.providerID + '/' + m.modelID : '(opencode-default)'}` +
+    `${resolvedVariant ? ` variant=${resolvedVariant}` : ''} planThenAct=${planOn}`
+  );
 
   onEvent({
     type: 'task_list',
@@ -196,7 +209,7 @@ export async function runAgentTask({
   const seen = new Set();
   const deadline = Date.now() + config.agent.taskTimeoutMs;
 
-  await promptSession({ sessionId, directory, text: finalPrompt, model });
+  await promptSession({ sessionId, directory, text: finalPrompt, model, variant: resolvedVariant || undefined });
   onEvent({ type: 'status', message: safeMode === 'plan' ? 'Planning…' : 'Implementing…', phase: safeMode });
   await waitForSessionIdle({ sessionId, directory, signal, onEvent, seen, deadline });
 
@@ -246,7 +259,7 @@ export async function runAgentTask({
       onEvent({ type: 'status', message: `Repair round ${round}/${MAX_REPAIR_ROUNDS}`, phase: 'repair' });
       const repairPrompt = buildRepairPrompt(verification);
       const beforeRepair = await snapshotWorkspaceFingerprint(directory);
-      await promptSession({ sessionId, directory, text: repairPrompt, model });
+      await promptSession({ sessionId, directory, text: repairPrompt, model, variant: resolvedVariant || undefined });
       await waitForSessionIdle({ sessionId, directory, signal, onEvent, seen, deadline });
       verification = await verifyAgentOutcome(directory, beforeRepair, {
         runVerify: true,

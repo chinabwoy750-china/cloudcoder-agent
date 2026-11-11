@@ -48,6 +48,7 @@ const state = {
   stream: null,
   workspaces: [],
   models: [],
+  modelDetails: {}, // openCodeRef -> { variants, free, source, name, providerId }
   openCodeReady: false,
   modelMeta: { defaultModel: null, source: null, error: null },
   previewOpen: false,
@@ -1383,13 +1384,14 @@ $('#composer')?.addEventListener('submit', async (e) => {
   try {
     const composerMode = $('#task-mode')?.value || 'build';
     const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select')?.value || undefined;
+    const variant = ($('#variant-select')?.value || '').trim() || undefined;
     const mode = composerMode === 'plan' ? 'thorough' : 'fast';
     const modePrompt = composerMode === 'plan'
       ? `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`
       : `BUILD MODE: Implement the requested changes in the project, then run appropriate checks and report what was verified.\n\nUser request: ${prompt}`;
     const res = await api('/api/agent/tasks', {
       method: 'POST',
-      body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, mode }),
+      body: JSON.stringify({ workspaceId: state.workspaceId, prompt: modePrompt, model, variant, mode }),
     });
     const jobId = res?.jobId;
     if (!jobId) throw new Error('Server did not return a job id');
@@ -2104,23 +2106,35 @@ async function loadModels() {
     }
   };
 
-  // Primary: safe backend model list (no secrets)
+  // Primary: safe backend model list (custom gateway + OpenCode free/paid)
   try {
-    const data = await api('/api/models');
+    const data = await api('/api/models?refresh=1');
     state.modelMeta = {
       defaultModel: data.defaultModel || null,
       source: data.source || null,
       error: data.error || null,
     };
     state.openCodeReady = Boolean(data.openCodeReady);
+    state.modelDetails = {};
     for (const m of data.models || []) {
       const ref = m.openCodeRef || m.id;
-      add(ref, m.name ? `${m.name} (${ref})` : ref);
+      const freeTag = m.free ? ' · free' : '';
+      const srcTag = m.source === 'opencode' ? ' · OpenCode' : (m.source === 'custom' ? ' · China-GPT' : '');
+      const label = m.name ? `${m.name}${freeTag}${srcTag}` : `${ref}${freeTag}${srcTag}`;
+      add(ref, label);
+      state.modelDetails[ref] = {
+        variants: Array.isArray(m.variants) ? m.variants : [],
+        free: Boolean(m.free),
+        source: m.source || '',
+        name: m.name || ref,
+        providerId: m.providerId || '',
+        reasoning: Boolean(m.reasoning),
+      };
     }
     if (data.defaultModel) add(data.defaultModel, data.defaultModel);
   } catch {}
 
-  // Fallback providers from OpenCode if list empty
+  // Fallback providers from OpenCode proxy if list still empty
   if (!state.models.length) {
     try {
       const res = await fetch('/opencode/config/providers', { credentials: 'same-origin' });
@@ -2155,6 +2169,7 @@ async function loadModels() {
     if (sel) sel.value = pref;
     if (settingsSel) settingsSel.value = pref;
   }
+  syncVariantOptions((sel && sel.value) || (settingsSel && settingsSel.value) || pref || '');
 
   // Settings meta (never secrets)
   const setText = (id, v) => { const el = $(id); if (el) el.textContent = v || '—'; };
@@ -2165,18 +2180,62 @@ async function loadModels() {
   updateComposerState();
 }
 
+const VARIANT_PREF_KEY = 'cc.preferredVariant';
+function persistVariant(v) {
+  try {
+    if (v) localStorage.setItem(VARIANT_PREF_KEY, v);
+    else localStorage.removeItem(VARIANT_PREF_KEY);
+  } catch {}
+}
+function restoreVariant() {
+  try { return localStorage.getItem(VARIANT_PREF_KEY) || ''; } catch { return ''; }
+}
+
+function syncVariantOptions(modelRef) {
+  const variantSel = $('#variant-select');
+  if (!variantSel) return;
+  const details = state.modelDetails[modelRef] || {};
+  const variants = Array.isArray(details.variants) ? details.variants : [];
+  variantSel.innerHTML = '';
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = variants.length ? 'Default quality' : 'No quality options';
+  variantSel.appendChild(def);
+  for (const v of variants) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    variantSel.appendChild(opt);
+  }
+  // Only show when OpenCode (or any model) reports variants — never hardcode
+  const show = variants.length > 0;
+  variantSel.classList.toggle('hidden', !show);
+  variantSel.disabled = !show;
+  const preferred = restoreVariant();
+  if (show && preferred && variants.includes(preferred)) {
+    variantSel.value = preferred;
+  } else {
+    variantSel.value = '';
+  }
+}
+
 // Sync model selectors + persist preference
 $('#model-select')?.addEventListener('change', () => {
   const v = $('#model-select')?.value;
   persistModel(v);
   const settingsSel = $('#settings-model');
   if (settingsSel && settingsSel.value !== v) settingsSel.value = v;
+  syncVariantOptions(v || '');
 });
 $('#settings-model')?.addEventListener('change', () => {
   const v = $('#settings-model').value;
   persistModel(v);
   const sel = $('#model-select');
   if (sel && sel.value !== v) sel.value = v;
+  syncVariantOptions(v || '');
+});
+$('#variant-select')?.addEventListener('change', () => {
+  persistVariant($('#variant-select')?.value || '');
 });
 
 /* ---------------- Project preview ---------------- */

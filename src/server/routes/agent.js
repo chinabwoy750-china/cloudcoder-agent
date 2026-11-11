@@ -27,6 +27,8 @@ export function agentRouter() {
     (req, res, next) => {
       const { workspaceId, prompt, model } = req.body || {};
       const mode = req.body?.mode === 'plan' ? 'plan' : 'build';
+      const variantRaw = req.body?.variant;
+      const variant = typeof variantRaw === 'string' && variantRaw.trim() ? variantRaw.trim() : undefined;
       if (!workspaceId || !prompt || typeof prompt !== 'string') {
         return res.status(400).json({ error: 'workspaceId and prompt are required' });
       }
@@ -53,8 +55,19 @@ export function agentRouter() {
               snapshotMeta = { error: snapErr.message };
             }
           }
-          const job = createJob({ type: 'agent', meta: { workspaceId, source: 'api', model: resolvedModel, mode, ownerUserId: req.authUserId || null, snapshotId: snapshotMeta?.id || null } });
-          res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null, mode });
+          const job = createJob({
+            type: 'agent',
+            meta: {
+              workspaceId,
+              source: 'api',
+              model: resolvedModel,
+              variant: variant || null,
+              mode,
+              ownerUserId: req.authUserId || null,
+              snapshotId: snapshotMeta?.id || null,
+            },
+          });
+          res.status(202).json({ jobId: job.id, workspaceId, model: resolvedModel || null, variant: variant || null, mode });
 
           if (snapshotMeta?.id) {
             emit(job, { type: 'status', message: `Recovery snapshot ${snapshotMeta.id}`, phase: 'snapshot', snapshotId: snapshotMeta.id });
@@ -65,6 +78,7 @@ export function agentRouter() {
             directory: dir,
             prompt,
             model: resolvedModel,
+            variant,
             mode,
             onEvent: (ev) => emit(job, ev),
             signal: job.controller.signal,

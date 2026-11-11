@@ -230,14 +230,18 @@ export function resolveUserModelSelection(input) {
   const knownBuiltin = new Set([
     'openai', 'anthropic', 'google', 'gemini', 'openrouter', 'groq',
     'cerebras', 'mistral', 'xai', 'cohere', 'bedrock', 'azure',
+    'opencode', 'opencode-go', 'github-copilot', 'copilot',
   ]);
 
+  // Strip optional #variant suffix for resolution; variant is handled separately.
+  const baseRef = trimmed.includes('#') ? trimmed.split('#')[0] : trimmed;
+
   // Exact cache match on openCodeRef
-  const exact = cache.models.find((m) => m.openCodeRef === trimmed);
+  const exact = cache.models.find((m) => m.openCodeRef === baseRef || m.openCodeRef === trimmed);
   if (exact) return exact.openCodeRef;
 
-  if (trimmed.includes('/')) {
-    const [head, ...rest] = trimmed.split('/');
+  if (baseRef.includes('/')) {
+    const [head, ...rest] = baseRef.split('/');
     const restJoined = rest.join('/');
 
     // provider/model under our custom provider
@@ -245,21 +249,21 @@ export function resolveUserModelSelection(input) {
       return `${providerId}/${sanitizeModelKey(restJoined)}`;
     }
 
-    // Known built-in provider — pass through
+    // Known built-in / OpenCode free provider — pass through as-is
     if (knownBuiltin.has(head.toLowerCase())) {
-      return trimmed;
+      return baseRef;
     }
 
     // Otherwise treat the whole string as an opaque upstream model id
     // (e.g. "free-way/gpt-5.6-luna" from the custom endpoint)
     if (process.env.CUSTOM_AI_BASE_URL) {
       const hit = cache.models.find(
-        (m) => m.id === trimmed || m.openCodeModelId === sanitizeModelKey(trimmed)
+        (m) => m.id === baseRef || m.openCodeModelId === sanitizeModelKey(baseRef)
       );
       if (hit) return hit.openCodeRef;
-      return `${providerId}/${sanitizeModelKey(trimmed)}`;
+      return `${providerId}/${sanitizeModelKey(baseRef)}`;
     }
-    return trimmed;
+    return baseRef;
   }
 
   // Bare id

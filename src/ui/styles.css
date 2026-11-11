@@ -444,6 +444,28 @@ input:focus, textarea:focus, select:focus {
 .composer-left, .composer-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .composer-left { flex: 1; min-width: 0; }
 .composer-right { flex: 0 0 auto; }
+.composer-model-select,
+.composer-variant-select {
+  max-width: 160px;
+  min-width: 0;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.25);
+  color: inherit;
+  font-size: 12px;
+  padding: 0 8px;
+}
+.composer-variant-select { max-width: 120px; }
+.composer-model-select:focus,
+.composer-variant-select:focus {
+  outline: none;
+  border-color: rgba(124,158,255,.55);
+}
+@media (max-width: 720px) {
+  .composer-model-select { max-width: 120px; }
+  .composer-variant-select { max-width: 96px; }
+}
 
 .select-wrap {
   position: relative; display: inline-flex; align-items: center;

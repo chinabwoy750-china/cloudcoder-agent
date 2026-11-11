@@ -311,6 +311,12 @@
                 <input id="attach-input" type="file" multiple hidden />
               </div>
               <div class="composer-right">
+                <select id="model-select" class="composer-model-select" aria-label="Model" title="Model">
+                  <option value="">Default model</option>
+                </select>
+                <select id="variant-select" class="composer-variant-select hidden" aria-label="Reasoning quality" title="Reasoning quality (from OpenCode)">
+                  <option value="">Default quality</option>
+                </select>
                 <div class="mode-dropdown" data-mode-for="workspace">
                   <select id="task-mode" class="mode-select-native" aria-label="Composer mode" hidden>
                     <option value="build" selected>Build</option>

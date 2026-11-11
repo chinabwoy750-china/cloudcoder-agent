@@ -45,8 +45,21 @@ export async function oc(method, pathname, { body, query, timeoutMs = 30000, sig
   }
 }
 
+/**
+ * Split "provider/model" or "provider/model#variant" into OpenCode fields.
+ * Returns { providerID, modelID, variant? } or null.
+ */
 export function splitModel(model) {
-  if (!model || !model.includes('/')) return null;
-  const [providerID, ...rest] = model.split('/');
-  return { providerID, modelID: rest.join('/') };
+  if (!model || typeof model !== 'string' || !model.includes('/')) return null;
+  let raw = model.trim();
+  let variant;
+  if (raw.includes('#')) {
+    const hashIdx = raw.lastIndexOf('#');
+    variant = raw.slice(hashIdx + 1).trim() || undefined;
+    raw = raw.slice(0, hashIdx);
+  }
+  const [providerID, ...rest] = raw.split('/');
+  const modelID = rest.join('/');
+  if (!providerID || !modelID) return null;
+  return variant ? { providerID, modelID, variant } : { providerID, modelID };
 }
