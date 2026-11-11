@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS chat_messages_workspace_created_idx ON chat_messages(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS workspace_chat (
+  workspace_id VARCHAR(64) PRIMARY KEY,
+  messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 CREATE TABLE IF NOT EXISTS audit_events (
   id BIGSERIAL PRIMARY KEY,
   owner_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,

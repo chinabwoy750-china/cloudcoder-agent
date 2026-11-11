@@ -196,17 +196,35 @@ function saveChatHistory() {
   updateEmptyStateVisibility();
   // Debounced server persist so mobile/desktop share the same thread
   if (chatSaveTimer) clearTimeout(chatSaveTimer);
-  chatSaveTimer = setTimeout(async () => {
-    try {
-      await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/chat`, {
-        method: 'PUT',
-        body: JSON.stringify({ messages: items }),
-      });
-    } catch {
-      // offline / ephemeral — local cache still works on this device
-    }
-  }, 400);
+  chatSaveTimer = setTimeout(() => flushChatHistory(), 250);
 }
+
+async function flushChatHistory() {
+  if (!state.workspaceId) return;
+  if (chatSaveTimer) {
+    clearTimeout(chatSaveTimer);
+    chatSaveTimer = null;
+  }
+  const items = collectMessagesFromUI();
+  try {
+    localStorage.setItem(chatStorageKey(state.workspaceId), JSON.stringify(items));
+  } catch { /* quota */ }
+  try {
+    await api(`/api/workspaces/${encodeURIComponent(state.workspaceId)}/chat`, {
+      method: 'PUT',
+      body: JSON.stringify({ messages: items }),
+      timeoutMs: 15000,
+    });
+  } catch {
+    // offline — local cache still works on this device
+  }
+}
+
+// Ensure chat is pushed to server before leaving the page
+window.addEventListener('pagehide', () => { flushChatHistory(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushChatHistory();
+});
 
 async function loadChatHistory(workspaceId) {
   clearMessagesUI();
@@ -995,6 +1013,7 @@ $('#new-task-btn')?.addEventListener('click', () => {
 async function selectWorkspace(id) {
   closeDrawers();
   resetJobState('workspace-switch');
+  state.workspaceId = id; // set before load/save so persistence targets the right project
   setShell('workspace');
   await loadChatHistory(id);
   const ws = state.workspaces.find((w) => w.id === id);
