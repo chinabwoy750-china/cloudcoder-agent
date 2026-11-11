@@ -1543,6 +1543,7 @@ body.shell-workspace-active .app {
 }
 body.shell-workspace-active #shell-workspace {
   display: grid !important;
+  /* default tracks — JS #um-force-layout overrides based on pane toggles */
   grid-template-columns: minmax(220px, var(--nav-w, 260px)) 6px minmax(320px, 1fr) 6px minmax(300px, var(--studio-w, 40vw));
   grid-template-rows: 1fr;
   height: 100dvh;
@@ -1551,27 +1552,17 @@ body.shell-workspace-active #shell-workspace {
 }
 body.shell-workspace-active .sidebar {
   display: flex;
-  grid-column: 1;
-  grid-row: 1;
   height: 100%;
   overflow: auto;
+  min-width: 0;
 }
 body.shell-workspace-active .main {
-  grid-column: 2;
-  grid-row: 1;
   min-width: 0;
   height: 100%;
   overflow: hidden;
 }
 body.shell-workspace-active .inspector {
-  display: flex;
-  flex-direction: column;
-  grid-column: 3;
-  grid-row: 1;
-  height: 100%;
-  overflow: auto;
-  border-left: 1px solid var(--line);
-  background: var(--bg-2);
+  display: none; /* desktop studio uses #studio-panel */
 }
 body.shell-workspace-active .topbar {
   display: flex;
@@ -2362,8 +2353,6 @@ html[data-dashboard-bg="minimal"] .home-glow {
     display: grid !important;
   }
   body.shell-workspace-active .sidebar {
-    grid-column: 1;
-    grid-row: 1;
     position: relative !important;
     transform: none !important;
     width: auto !important;
@@ -2373,33 +2362,21 @@ html[data-dashboard-bg="minimal"] .home-glow {
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     border-right: 1px solid rgba(255,255,255,0.06);
-    animation: paneInLeft .45s cubic-bezier(.22,1,.36,1) both;
   }
   body.shell-workspace-active #resizer-nav {
-    grid-column: 2;
-    grid-row: 1;
     display: block;
   }
   body.shell-workspace-active .main {
-    grid-column: 3;
-    grid-row: 1;
     min-width: 0;
     height: 100%;
     background: rgba(10, 12, 18, 0.55);
-    animation: paneInUp .5s cubic-bezier(.22,1,.36,1) both;
   }
   body.shell-workspace-active #resizer-studio {
-    grid-column: 4;
-    grid-row: 1;
     display: block;
   }
   body.shell-workspace-active .studio-panel {
-    grid-column: 5;
-    grid-row: 1;
-    display: flex !important;
     height: 100%;
     min-width: 0;
-    animation: paneInRight .55s cubic-bezier(.22,1,.36,1) both;
   }
   body.shell-workspace-active .inspector {
     display: none !important;
@@ -4220,3 +4197,69 @@ body.nav-pane-collapsed #workspace-menu-btn {
 }
 .composer-model-select,
 .composer-variant-select { display: none !important; }
+
+
+/* Grok-style pane toggle buttons */
+.pane-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg-2, #c8d0e0);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.pane-toggle-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--fg, #edf1ff);
+  border-color: rgba(255,255,255,0.08);
+}
+.pane-toggle-btn[aria-pressed="false"] {
+  color: var(--accent, #7c9eff);
+}
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 10px;
+}
+.sidebar-head .brand {
+  min-width: 0;
+  flex: 1;
+}
+.sidebar-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.pane-resizer {
+  width: 6px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 5;
+  background: transparent;
+}
+.pane-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.05);
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.pane-resizer:hover::after,
+.pane-resizer.dragging::after {
+  background: rgba(124,158,255,0.65);
+  box-shadow: 0 0 12px rgba(124,158,255,0.35);
+}
