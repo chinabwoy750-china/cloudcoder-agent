@@ -54,6 +54,7 @@ const state = {
   previewOpen: false,
   navPaneVisible: true,
   previewPaneVisible: true,
+  sidebarProjectsExpanded: false,
   modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
   shell: 'home',
   menuWorkspaceId: null,
@@ -1033,25 +1034,42 @@ function renderSidebarProjects() {
   if (q) {
     list = list.filter((w) => String(w.name || w.id).toLowerCase().includes(q));
   }
-  // Sidebar shows a short list; full list is on Projects page
-  const SIDEBAR_LIMIT = 6;
-  const shown = list.slice(0, SIDEBAR_LIMIT);
+  // Compact list in the nav; "See all" expands in-place (does not leave the workspace shell)
+  const SIDEBAR_LIMIT = 8;
+  const expanded = Boolean(state.sidebarProjectsExpanded) || Boolean(q);
+  const shown = expanded ? list : list.slice(0, SIDEBAR_LIMIT);
   ul.innerHTML = '';
   for (const w of shown) {
     const li = document.createElement('li');
-    li.className = 'clickable' + (w.id === state.workspaceId ? ' active' : '');
+    li.className = 'workspace-item clickable' + (w.id === state.workspaceId ? ' active' : '');
     const fc = Number(w.files ?? 0);
-    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${fc === 1 ? '1 file' : `${fc} files`}</span>`;
+    li.innerHTML =
+      `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span>` +
+      `<span class="workspace-meta">${fc === 1 ? '1 file' : `${fc} files`}</span>`;
+    li.title = w.name || w.id;
     li.addEventListener('click', () => selectWorkspace(w.id));
     ul.appendChild(li);
   }
   if (!list.length) {
-    ul.innerHTML = '<li class="muted small">No projects yet</li>';
+    ul.innerHTML = '<li class="muted small workspace-empty">No projects yet</li>';
   }
   const seeAll = $('#see-all-projects-btn');
   if (seeAll) {
-    seeAll.style.display = list.length > SIDEBAR_LIMIT || !q ? '' : (list.length ? '' : 'none');
-    seeAll.textContent = list.length > SIDEBAR_LIMIT ? `See all projects (${list.length})` : 'See all projects';
+    if (!list.length) {
+      seeAll.classList.add('hidden');
+    } else if (list.length <= SIDEBAR_LIMIT && !q) {
+      // Nothing to expand
+      seeAll.classList.add('hidden');
+    } else {
+      seeAll.classList.remove('hidden');
+      if (expanded && !q) {
+        seeAll.textContent = 'Show less';
+        seeAll.dataset.expanded = '1';
+      } else {
+        seeAll.textContent = `See all projects (${list.length})`;
+        seeAll.dataset.expanded = '0';
+      }
+    }
   }
 }
 
@@ -2076,9 +2094,12 @@ $('#projects-collapse-toggle')?.addEventListener('click', () => {
 $('#sidebar-projects-search')?.addEventListener('input', () => renderSidebarProjects());
 
 $('#see-all-projects-btn')?.addEventListener('click', () => {
-  closeDrawers();
-  setShell('projects');
-  renderProjectsList();
+  // Stay on the navigation bar — expand/collapse the full project list in-place
+  state.sidebarProjectsExpanded = !state.sidebarProjectsExpanded;
+  // Show search when expanded so long lists are usable
+  const searchRow = $('#projects-search-row');
+  if (searchRow) searchRow.classList.toggle('hidden', !state.sidebarProjectsExpanded && !getSidebarProjectFilter());
+  renderSidebarProjects();
 });
 
 function updateAccountAvatar() {
@@ -2206,15 +2227,9 @@ async function loadModels() {
     for (const m of data.models || []) {
       const ref = m.openCodeRef || m.id;
       const providerId = String(m.providerId || ref.split('/')[0] || '').toLowerCase();
-      // Keep China-GPT/custom + OpenCode models. Hide Copilot/etc. unless explicitly wanted.
-      const allowed =
-        m.source === 'custom' ||
-        providerId === 'opencode' ||
-        providerId === 'opencode-go' ||
-        providerId === (data.providerId || '').toLowerCase() ||
-        Boolean(m.free);
-      const blocked = /copilot|github-copilot|azure|bedrock/i.test(providerId) || /copilot/i.test(ref);
-      if (!allowed || blocked) continue;
+      // China-GPT (custom) + every OpenCode provider model. Only hide Copilot noise.
+      const blocked = /copilot|github-copilot/i.test(providerId) || /copilot/i.test(ref);
+      if (blocked) continue;
       const freeTag = m.free ? ' · free' : '';
       const srcTag = m.source === 'opencode' ? ' · OpenCode' : (m.source === 'custom' ? ' · China-GPT' : '');
       const label = m.name ? `${m.name}${freeTag}${srcTag}` : `${ref}${freeTag}${srcTag}`;
