@@ -4065,3 +4065,93 @@ html[data-dashboard-bg="minimal"] .home-glow {
     display: none !important;
   }
 }
+
+
+/* =====================================================================
+   NUCLEAR 3-COLUMN WORKSPACE — last rule wins
+   ===================================================================== */
+@media (min-width: 900px) {
+  body.shell-workspace-active #app {
+    display: block !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace {
+    display: grid !important;
+    grid-template-columns: 260px minmax(320px, 1fr) minmax(360px, 1.3fr) !important;
+    grid-template-rows: 100dvh !important;
+    grid-template-areas: "nav chat preview" !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    gap: 0 !important;
+  }
+  body.shell-workspace-active #shell-workspace > .sidebar {
+    grid-area: nav !important;
+    position: relative !important;
+    transform: none !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: auto !important;
+  }
+  body.shell-workspace-active #shell-workspace > .main {
+    grid-area: chat !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    height: 100% !important;
+    max-width: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace > #studio-panel,
+  body.shell-workspace-active #shell-workspace > .studio-panel {
+    grid-area: preview !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    width: auto !important;
+    height: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  body.shell-workspace-active #shell-workspace > #inspector,
+  body.shell-workspace-active #shell-workspace > #resizer-nav,
+  body.shell-workspace-active #shell-workspace > #resizer-studio {
+    display: none !important;
+  }
+  body.shell-workspace-active #view-chat,
+  body.shell-workspace-active #view-chat.hidden {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
+  body.shell-workspace-active #preview-view { display: none !important; }
+  body.shell-workspace-active .studio-glass {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+  }
+  body.shell-workspace-active .studio-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+}

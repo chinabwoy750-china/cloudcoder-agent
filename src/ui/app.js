@@ -256,6 +256,7 @@ function updateEmptyStateVisibility() {
 
 
 /* ---- Workspace layout: simple flex, full viewport ---- */
+
 function layoutWorkspacePanes() {
   let tag = document.getElementById('um-force-layout');
   if (!tag) {
@@ -267,188 +268,59 @@ function layoutWorkspacePanes() {
     tag.textContent = '';
     return;
   }
-
-  const w = Math.max(
-    320,
-    window.visualViewport?.width || 0,
-    window.innerWidth || 0,
-    document.documentElement.clientWidth || 0
-  );
-  const desktop = w >= 900;
-
-  if (!desktop) {
+  const w = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
+  if (w < 900) {
     tag.textContent = `
-      html, body, #app {
-        width: 100% !important;
-        height: 100% !important;
-        margin: 0 !important;
-        overflow: hidden !important;
-        background: #08090d !important;
-      }
       body.shell-workspace-active #shell-workspace {
-        display: flex !important;
-        flex-direction: column !important;
-        width: 100% !important;
-        height: 100dvh !important;
-        position: relative !important;
-        overflow: hidden !important;
-      }
-      body.shell-workspace-active #shell-workspace > .main {
-        flex: 1 1 auto !important;
-        width: 100% !important;
-        min-height: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        position: relative !important;
-        overflow: hidden !important;
+        display: flex !important; flex-direction: column !important;
+        width: 100% !important; height: 100dvh !important;
       }
       body.shell-workspace-active #shell-workspace > .sidebar {
-        position: fixed !important;
-        left: 0 !important; top: 0 !important; bottom: 0 !important;
-        width: min(300px, 86vw) !important;
-        height: 100% !important;
-        transform: translateX(-105%) !important;
-        transition: transform .24s cubic-bezier(.32,.72,0,1) !important;
-        z-index: 90 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        background: #10131a !important;
+        position: fixed !important; transform: translateX(-105%) !important;
+        z-index: 90 !important; width: min(300px, 86vw) !important; height: 100% !important;
       }
-      body.shell-workspace-active #shell-workspace > .sidebar.open {
-        transform: translateX(0) !important;
-        box-shadow: 12px 0 40px rgba(0,0,0,.55) !important;
-      }
+      body.shell-workspace-active #shell-workspace > .sidebar.open { transform: translateX(0) !important; }
+      body.shell-workspace-active #shell-workspace > .main { flex: 1 !important; width: 100% !important; }
       body.shell-workspace-active #shell-workspace > #studio-panel,
       body.shell-workspace-active #shell-workspace > .studio-panel,
+      body.shell-workspace-active #inspector,
       body.shell-workspace-active #resizer-nav,
-      body.shell-workspace-active #resizer-studio,
-      body.shell-workspace-active #inspector {
-        display: none !important;
-      }
-      body.shell-workspace-active #view-chat,
-      body.shell-workspace-active #view-chat.hidden {
-        display: flex !important;
-        flex-direction: column !important;
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        height: 100% !important;
-      }
-      body.shell-workspace-active #workspace-menu-btn {
-        display: inline-flex !important;
-      }
-      body.shell-workspace-active #bottom-nav { display: none !important; }
-      body.shell-workspace-active #scrim.visible {
-        display: block !important;
-        z-index: 80 !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-      }
+      body.shell-workspace-active #resizer-studio { display: none !important; }
+      body.shell-workspace-active #workspace-menu-btn { display: inline-flex !important; }
     `;
     return;
   }
-
-  /* DESKTOP: horizontal flex — nav | chat | preview filling 100% */
   tag.textContent = `
-    html, body, #app {
-      width: 100% !important;
-      max-width: none !important;
-      height: 100% !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      overflow: hidden !important;
-      background: #08090d !important;
-    }
-    body.shell-workspace-active #app {
-      display: block !important;
-    }
     body.shell-workspace-active #shell-workspace {
-      display: flex !important;
-      flex-direction: row !important;
-      flex-wrap: nowrap !important;
-      align-items: stretch !important;
-      width: 100vw !important;
-      max-width: 100vw !important;
-      height: 100dvh !important;
-      overflow: hidden !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      gap: 0 !important;
+      display: grid !important;
+      grid-template-columns: 260px minmax(320px, 1fr) minmax(360px, 1.3fr) !important;
+      grid-template-rows: 100dvh !important;
+      grid-template-areas: "nav chat preview" !important;
+      width: 100vw !important; height: 100dvh !important; overflow: hidden !important;
     }
     body.shell-workspace-active #shell-workspace > .sidebar {
-      flex: 0 0 260px !important;
-      width: 260px !important;
-      max-width: 260px !important;
-      height: 100% !important;
-      position: relative !important;
-      left: auto !important;
-      top: auto !important;
-      transform: none !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: auto !important;
-      background: #10131a !important;
-      border-right: 1px solid rgba(255,255,255,0.08) !important;
-      z-index: 2 !important;
+      grid-area: nav !important; position: relative !important; transform: none !important;
+      height: 100% !important; display: flex !important;
     }
     body.shell-workspace-active #shell-workspace > .main {
-      flex: 1 1 38% !important;
-      min-width: 280px !important;
-      max-width: none !important;
-      height: 100% !important;
-      position: relative !important;
-      left: auto !important;
-      top: auto !important;
-      right: auto !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: hidden !important;
-      background: #0c0e14 !important;
-      border-right: 1px solid rgba(255,255,255,0.06) !important;
-      z-index: 1 !important;
+      grid-area: chat !important; position: relative !important;
+      left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
+      display: flex !important; flex-direction: column !important; overflow: hidden !important;
     }
     body.shell-workspace-active #shell-workspace > #studio-panel,
     body.shell-workspace-active #shell-workspace > .studio-panel {
-      flex: 1 1 52% !important;
-      min-width: 320px !important;
-      max-width: none !important;
-      height: 100% !important;
-      position: relative !important;
-      left: auto !important;
-      top: auto !important;
-      right: auto !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: hidden !important;
-      background: #0a0c12 !important;
-      z-index: 1 !important;
+      grid-area: preview !important; position: relative !important;
+      left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
+      display: flex !important; flex-direction: column !important; overflow: hidden !important;
     }
+    body.shell-workspace-active #shell-workspace > #inspector,
     body.shell-workspace-active #resizer-nav,
-    body.shell-workspace-active #resizer-studio,
-    body.shell-workspace-active #inspector,
-    body.shell-workspace-active #bottom-nav,
-    body.shell-workspace-active #workspace-menu-btn,
-    body.shell-workspace-active #preview-view {
-      display: none !important;
-    }
+    body.shell-workspace-active #resizer-studio { display: none !important; }
     body.shell-workspace-active #view-chat,
     body.shell-workspace-active #view-chat.hidden {
-      display: flex !important;
-      flex-direction: column !important;
-      flex: 1 1 auto !important;
-      min-height: 0 !important;
-      height: 100% !important;
+      display: flex !important; flex: 1 1 auto !important; min-height: 0 !important;
+      height: 100% !important; flex-direction: column !important;
     }
-    body.shell-workspace-active .studio-glass {
-      display: flex !important;
-      flex-direction: column !important;
-      flex: 1 1 auto !important;
-      height: 100% !important;
-      min-height: 0 !important;
-    }
-    body.shell-workspace-active .studio-body {
-      flex: 1 1 auto !important;
-      min-height: 0 !important;
-      }
   `;
 }
 
