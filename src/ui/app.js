@@ -52,6 +52,8 @@ const state = {
   openCodeReady: false,
   modelMeta: { defaultModel: null, source: null, error: null },
   previewOpen: false,
+  navPaneVisible: true,
+  previewPaneVisible: true,
   modelRouting: { build: '', plan: '', image: '', video: '', audio: '' },
   shell: 'home',
   menuWorkspaceId: null,
@@ -276,6 +278,10 @@ function updateEmptyStateVisibility() {
 
 /* ---- Workspace layout: simple flex, full viewport ---- */
 
+function isDesktopStudio() {
+  return (window.innerWidth || 0) >= 900;
+}
+
 function layoutWorkspacePanes() {
   let tag = document.getElementById('um-force-layout');
   if (!tag) {
@@ -287,6 +293,12 @@ function layoutWorkspacePanes() {
     tag.textContent = '';
     return;
   }
+
+  const navOn = state.navPaneVisible !== false;
+  const previewOn = state.previewPaneVisible !== false;
+  document.body.classList.toggle('nav-pane-collapsed', !navOn);
+  document.body.classList.toggle('preview-pane-collapsed', !previewOn);
+
   const w = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
   if (w < 900) {
     tag.textContent = `
@@ -309,38 +321,67 @@ function layoutWorkspacePanes() {
     `;
     return;
   }
+
+  // Desktop: resizable 3-pane grid. Resizers stay visible when their pane is on.
+  const navCol = navOn ? 'minmax(200px, var(--nav-w, 260px)) 6px' : '0 0';
+  const studioCol = previewOn ? '6px minmax(280px, var(--studio-w, 42vw))' : '0 0';
   tag.textContent = `
     body.shell-workspace-active #shell-workspace {
       display: grid !important;
-      grid-template-columns: 260px minmax(320px, 1fr) minmax(360px, 1.3fr) !important;
+      grid-template-columns: ${navCol} minmax(280px, 1fr) ${studioCol} !important;
       grid-template-rows: 100dvh !important;
-      grid-template-areas: "nav chat preview" !important;
       width: 100vw !important; height: 100dvh !important; overflow: hidden !important;
     }
     body.shell-workspace-active #shell-workspace > .sidebar {
-      grid-area: nav !important; position: relative !important; transform: none !important;
-      height: 100% !important; display: flex !important;
+      position: relative !important; transform: none !important;
+      height: 100% !important; display: ${navOn ? 'flex' : 'none'} !important;
+      min-width: 0 !important;
+    }
+    body.shell-workspace-active #shell-workspace > #resizer-nav {
+      display: ${navOn ? 'block' : 'none'} !important;
+      width: 6px !important; cursor: col-resize !important;
     }
     body.shell-workspace-active #shell-workspace > .main {
-      grid-area: chat !important; position: relative !important;
+      position: relative !important;
       left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
       display: flex !important; flex-direction: column !important; overflow: hidden !important;
+      min-width: 0 !important;
+    }
+    body.shell-workspace-active #shell-workspace > #resizer-studio {
+      display: ${previewOn ? 'block' : 'none'} !important;
+      width: 6px !important; cursor: col-resize !important;
     }
     body.shell-workspace-active #shell-workspace > #studio-panel,
     body.shell-workspace-active #shell-workspace > .studio-panel {
-      grid-area: preview !important; position: relative !important;
+      position: relative !important;
       left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
-      display: flex !important; flex-direction: column !important; overflow: hidden !important;
+      display: ${previewOn ? 'flex' : 'none'} !important; flex-direction: column !important; overflow: hidden !important;
+      min-width: 0 !important;
     }
-    body.shell-workspace-active #shell-workspace > #inspector,
-    body.shell-workspace-active #resizer-nav,
-    body.shell-workspace-active #resizer-studio { display: none !important; }
+    body.shell-workspace-active #shell-workspace > #inspector { display: none !important; }
     body.shell-workspace-active #view-chat,
     body.shell-workspace-active #view-chat.hidden {
       display: flex !important; flex: 1 1 auto !important; min-height: 0 !important;
       height: 100% !important; flex-direction: column !important;
     }
   `;
+}
+
+function setNavPaneVisible(on) {
+  state.navPaneVisible = Boolean(on);
+  try { localStorage.setItem('um_nav_pane', state.navPaneVisible ? '1' : '0'); } catch {}
+  layoutWorkspacePanes();
+  const btn = $('#toggle-nav-pane');
+  if (btn) btn.setAttribute('aria-pressed', state.navPaneVisible ? 'true' : 'false');
+}
+function setPreviewPaneVisible(on) {
+  state.previewPaneVisible = Boolean(on);
+  try { localStorage.setItem('um_preview_pane', state.previewPaneVisible ? '1' : '0'); } catch {}
+  layoutWorkspacePanes();
+  const btn = $('#toggle-preview-pane');
+  if (btn) btn.setAttribute('aria-pressed', state.previewPaneVisible ? 'true' : 'false');
+  const top = $('#preview-toggle');
+  if (top) top.setAttribute('aria-pressed', state.previewPaneVisible ? 'true' : 'false');
 }
 
 function setShell(name) {
@@ -784,6 +825,10 @@ $('#menu-btn')?.addEventListener('click', openSidebar);
 $('#workspace-menu-btn')?.addEventListener('click', (e) => {
   e.preventDefault();
   e.stopPropagation();
+  if (isDesktopStudio() && state.navPaneVisible === false) {
+    setNavPaneVisible(true);
+    return;
+  }
   openSidebar();
 });
 
@@ -1383,8 +1428,8 @@ $('#composer')?.addEventListener('submit', async (e) => {
 
   try {
     const composerMode = $('#task-mode')?.value || 'build';
-    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || $('#model-select')?.value || undefined;
-    const variant = ($('#variant-select')?.value || '').trim() || undefined;
+    const model = state.modelRouting[composerMode] || $('#settings-model')?.value || undefined;
+    const variant = ($('#settings-variant')?.value || '').trim() || undefined;
     const mode = composerMode === 'plan' ? 'thorough' : 'fast';
     const modePrompt = composerMode === 'plan'
       ? `PLAN MODE: Analyze the request and project. Do not create, edit, or delete files. Return a clear implementation plan, files to change, and verification steps.\n\nUser request: ${prompt}`
@@ -1677,7 +1722,7 @@ function streamJob(jobId) {
   resetAgentActivity();
   resetAgentLive();
   const fu = $('#followup-suggestions'); if (fu) { fu.classList.add('hidden'); fu.innerHTML = ''; }
-  appendLiveEvent({ title: 'Agent session opened', kind: 'step', done: true });
+  setLiveStatus('Starting…', { live: true });
   updateComposerState();
 
   const finishClient = (ok, errorText) => {
@@ -1750,28 +1795,40 @@ function streamJob(jobId) {
     if (ev.type === 'session') {
       setAgentStatus(`Session ${ev.sessionId || ''}`.trim());
       appendAgentLog(`session ${ev.sessionId || ''}`);
-      appendLiveEvent({ title: 'Connected to coding engine', kind: 'step', done: true, meta: 'session' });
+      setLiveStatus('Working…', { live: true });
       setLiveStatus('Connected', { live: true });
     } else if (ev.type === 'task_list') {
       renderTaskList(ev.items || [], ev.mode);
-      for (const item of ev.items || []) appendLiveEvent({ title: String(item), kind: 'step' });
       setLiveStatus(ev.mode === 'plan' ? 'Planning…' : 'Working…', { live: true });
     } else if (ev.type === 'status') {
-      setAgentStatus(ev.message || ev.phase || 'Working…');
-      appendAgentLog(ev.message || ev.phase || 'status');
-      if (ev.phase === 'inventory' && Array.isArray(ev.sample) && ev.sample.length) {
-        appendLiveEvent({ title: ev.message || 'Workspace inventory', kind: 'file', done: true, detail: ev.sample.join('\n') });
-      } else if (ev.phase === 'error') {
-        appendLiveEvent({ title: ev.message || 'Error', kind: 'error', done: true });
+      // Keep the chat clean — only surface user-facing progress, not internal engine chatter.
+      const phase = String(ev.phase || '').toLowerCase();
+      const friendly = {
+        start: 'Starting…',
+        snapshot: 'Preparing workspace…',
+        inspect: 'Reading your project…',
+        plan: 'Planning changes…',
+        build: 'Building…',
+        repair: 'Fixing issues…',
+        inventory: 'Scanning files…',
+        error: 'Something went wrong',
+      };
+      const label = friendly[phase] || null;
+      if (phase === 'error') {
+        appendLiveEvent({ title: ev.message || 'Something went wrong', kind: 'error', done: true });
+        setLiveStatus(ev.message || 'Failed', { live: false });
+        setAgentStatus(ev.message || 'Failed');
+      } else if (label) {
+        setLiveStatus(label, { live: true });
+        setAgentStatus(label);
+        // One subtle step per phase — never raw "Workspace fingerprint captured"
+        appendLiveEvent({ title: label, kind: 'step', done: true, meta: phase });
       } else {
-        appendLiveEvent({ title: ev.message || ev.phase || 'Status', kind: 'step', done: true, meta: ev.phase || '' });
+        // Ignore low-level status noise in the timeline; still keep a soft live label if useful
+        if (ev.message && !/fingerprint|session|opencode|directory|cwd/i.test(String(ev.message))) {
+          setLiveStatus(String(ev.message).slice(0, 80), { live: true });
+        }
       }
-      if (ev.phase === 'snapshot') setLiveStatus('Saving recovery point…', { live: true });
-      else if (ev.phase === 'inspect') setLiveStatus('Inspecting workspace…', { live: true });
-      else if (ev.phase === 'plan') setLiveStatus('Planning…', { live: true });
-      else if (ev.phase === 'build') setLiveStatus('Building…', { live: true });
-      else if (ev.phase === 'repair') setLiveStatus('Repairing…', { live: true });
-      else if (ev.message) setLiveStatus(ev.message, { live: true });
     } else if (ev.type === 'tool') {
       const name = ev.tool || 'tool';
       const path = ev.path || '';
@@ -2118,6 +2175,16 @@ async function loadModels() {
     state.modelDetails = {};
     for (const m of data.models || []) {
       const ref = m.openCodeRef || m.id;
+      const providerId = String(m.providerId || ref.split('/')[0] || '').toLowerCase();
+      // Keep China-GPT/custom + OpenCode models. Hide Copilot/etc. unless explicitly wanted.
+      const allowed =
+        m.source === 'custom' ||
+        providerId === 'opencode' ||
+        providerId === 'opencode-go' ||
+        providerId === (data.providerId || '').toLowerCase() ||
+        Boolean(m.free);
+      const blocked = /copilot|github-copilot|azure|bedrock/i.test(providerId) || /copilot/i.test(ref);
+      if (!allowed || blocked) continue;
       const freeTag = m.free ? ' · free' : '';
       const srcTag = m.source === 'opencode' ? ' · OpenCode' : (m.source === 'custom' ? ' · China-GPT' : '');
       const label = m.name ? `${m.name}${freeTag}${srcTag}` : `${ref}${freeTag}${srcTag}`;
@@ -2192,14 +2259,14 @@ function restoreVariant() {
 }
 
 function syncVariantOptions(modelRef) {
-  const variantSel = $('#variant-select');
+  const variantSel = $('#settings-variant') || $('#variant-select');
   if (!variantSel) return;
   const details = state.modelDetails[modelRef] || {};
   const variants = Array.isArray(details.variants) ? details.variants : [];
   variantSel.innerHTML = '';
   const def = document.createElement('option');
   def.value = '';
-  def.textContent = variants.length ? 'Default quality' : 'No quality options';
+  def.textContent = variants.length ? 'Default (model default)' : 'No quality options for this model';
   variantSel.appendChild(def);
   for (const v of variants) {
     const opt = document.createElement('option');
@@ -2207,31 +2274,36 @@ function syncVariantOptions(modelRef) {
     opt.textContent = v;
     variantSel.appendChild(opt);
   }
-  // Only show when OpenCode (or any model) reports variants — never hardcode
-  const show = variants.length > 0;
-  variantSel.classList.toggle('hidden', !show);
-  variantSel.disabled = !show;
+  variantSel.disabled = variants.length === 0;
   const preferred = restoreVariant();
-  if (show && preferred && variants.includes(preferred)) {
+  if (variants.length && preferred && variants.includes(preferred)) {
     variantSel.value = preferred;
   } else {
     variantSel.value = '';
   }
+  const hint = $('#variant-hint');
+  if (hint) {
+    hint.textContent = variants.length
+      ? `OpenCode variants for this model: ${variants.join(', ')}`
+      : 'This model has no OpenCode reasoning variants.';
+  }
 }
 
-// Sync model selectors + persist preference
+// Preferred model + reasoning quality live in Settings
+$('#settings-model')?.addEventListener('change', () => {
+  const v = $('#settings-model').value;
+  persistModel(v);
+  syncVariantOptions(v || '');
+});
+$('#settings-variant')?.addEventListener('change', () => {
+  persistVariant($('#settings-variant')?.value || '');
+});
+// Legacy composer selects if still present
 $('#model-select')?.addEventListener('change', () => {
   const v = $('#model-select')?.value;
   persistModel(v);
   const settingsSel = $('#settings-model');
   if (settingsSel && settingsSel.value !== v) settingsSel.value = v;
-  syncVariantOptions(v || '');
-});
-$('#settings-model')?.addEventListener('change', () => {
-  const v = $('#settings-model').value;
-  persistModel(v);
-  const sel = $('#model-select');
-  if (sel && sel.value !== v) sel.value = v;
   syncVariantOptions(v || '');
 });
 $('#variant-select')?.addEventListener('change', () => {
@@ -2864,6 +2936,37 @@ $('#studio-publish-btn')?.addEventListener('click', () => {
   toast('Publish: download ZIP or connect a host from project actions', 'ok');
   if (state.workspaceId) window.open(`/api/workspaces/${state.workspaceId}/zip`, '_blank');
 });
+
+
+/* Pane visibility toggles */
+(function setupPaneToggles() {
+  try {
+    const nav = localStorage.getItem('um_nav_pane');
+    const prev = localStorage.getItem('um_preview_pane');
+    if (nav === '0') state.navPaneVisible = false;
+    if (prev === '0') state.previewPaneVisible = false;
+  } catch {}
+  $('#toggle-nav-pane')?.addEventListener('click', () => setNavPaneVisible(!state.navPaneVisible));
+  $('#toggle-preview-pane')?.addEventListener('click', () => setPreviewPaneVisible(!state.previewPaneVisible));
+  // Topbar preview button also restores/hides desktop studio pane
+  const prevToggle = $('#preview-toggle');
+  if (prevToggle) {
+    prevToggle.addEventListener('click', (e) => {
+      if (isDesktopStudio()) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setPreviewPaneVisible(!state.previewPaneVisible);
+      }
+    }, true);
+  }
+  // Floating reopen when nav collapsed
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'b' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      e.preventDefault();
+      setNavPaneVisible(!state.navPaneVisible);
+    }
+  });
+})();
 
 /* Resizable panes */
 (function setupPaneResize() {

@@ -4177,3 +4177,46 @@ html[data-dashboard-bg="minimal"] .home-glow {
     min-height: 0 !important;
   }
 }
+
+
+/* Pane toggle controls */
+.sidebar-head-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.desktop-only { display: none; }
+@media (min-width: 901px) {
+  .desktop-only { display: inline-flex !important; }
+}
+#toggle-nav-pane,
+#toggle-preview-pane {
+  opacity: 0.7;
+}
+#toggle-nav-pane:hover,
+#toggle-preview-pane:hover { opacity: 1; }
+body.nav-pane-collapsed #workspace-menu-btn {
+  display: inline-flex !important;
+}
+/* Cleaner live activity */
+.agent-live {
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+}
+.agent-live-head {
+  gap: 10px;
+}
+.agent-live-badge {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+.live-event {
+  padding: 6px 0;
+  opacity: 0.9;
+}
+.live-event-node {
+  width: 8px;
+  height: 8px;
+}
+.composer-model-select,
+.composer-variant-select { display: none !important; }

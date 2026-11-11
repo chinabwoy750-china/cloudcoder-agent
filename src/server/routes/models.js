@@ -39,6 +39,9 @@ export function modelsRouter() {
       const opencodeModels = [];
       for (const m of oc.models || []) {
         if (seen.has(m.openCodeRef)) continue;
+        const pid = String(m.providerId || '').toLowerCase();
+        // Prefer OpenCode free/catalog models; skip Copilot unless it is the only thing available.
+        if (/copilot|github-copilot/.test(pid) || /copilot/i.test(m.openCodeRef || '')) continue;
         seen.add(m.openCodeRef);
         opencodeModels.push({
           id: m.id,
