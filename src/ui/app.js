@@ -2,27 +2,45 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const api = async (path, opts = {}) => {
-  const res = await fetch(path, {
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CloudCoder-CSRF': '1',
-      ...(opts.headers || {}),
-    },
-    ...opts,
-  });
-  const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!res.ok) {
-    if (res.status === 429) {
-      const wait = data?.retryAfterSec || res.headers.get('Retry-After') || 30;
-      throw new Error(data?.error || `Too many requests — wait ${wait}s and try again`);
+  const timeoutMs = opts.timeoutMs ?? 12000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(path, {
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CloudCoder-CSRF': '1',
+        ...(opts.headers || {}),
+      },
+      ...opts,
+      signal: opts.signal || controller.signal,
+    });
+    const text = await res.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) {
+      if (res.status === 429) {
+        const wait = data?.retryAfterSec || res.headers.get('Retry-After') || 30;
+        throw new Error(data?.error || `Too many requests — wait ${wait}s and try again`);
+      }
+      throw new Error(data?.error || `HTTP ${res.status}`);
     }
-    throw new Error(data?.error || `HTTP ${res.status}`);
+    return data;
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error('Request timed out — try again');
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return data;
 };
+
+function hideBootLoader() {
+  try {
+    document.getElementById('boot-loader')?.classList.add('done');
+    if (window.__umBootTimer) clearTimeout(window.__umBootTimer);
+  } catch {}
+}
 
 const state = {
   workspaceId: null,
@@ -449,20 +467,23 @@ $('#home-prompt')?.addEventListener('keydown', (e) => {
 
 
 function showLogin() {
-  $('#login').classList.remove('hidden');
-  $('#app').classList.add('hidden');
+  hideBootLoader();
+  $('#login')?.classList.remove('hidden');
+  $('#app')?.classList.add('hidden');
 }
 function showApp() {
-  $('#login').classList.add('hidden');
-  $('#app').classList.remove('hidden');
+  hideBootLoader();
+  $('#login')?.classList.add('hidden');
+  $('#app')?.classList.remove('hidden');
   setShell(state.workspaceId ? 'workspace' : 'home');
 }
 
 async function checkSession() {
   try {
-    await api('/api/auth/me');
+    await api('/api/auth/me', { timeoutMs: 8000 });
     showApp();
-    await Promise.all([refreshWorkspaces(), refreshRepos()]);
+    // Non-blocking secondary loads — never keep the screen black
+    Promise.all([refreshWorkspaces().catch(() => {}), refreshRepos().catch(() => {})]);
   } catch {
     showLogin();
   }
@@ -957,7 +978,7 @@ async function refreshRepos() {
     ul.innerHTML = `<li class="muted">${escapeHtml(err.message)}</li>`;
   }
 }
-$('#refresh-repos').addEventListener('click', refreshRepos);
+$('#refresh-repos')?.addEventListener('click', refreshRepos);
 
 /* ---------------- Files ---------------- */
 
@@ -990,7 +1011,7 @@ async function refreshFiles() {
   }
 }
 
-$('#upload-files').addEventListener('click', () => {
+$('#upload-files')?.addEventListener('click', () => {
   if (!state.workspaceId) return toast('Select a workspace first', 'err');
   const input = document.createElement('input');
   input.type = 'file'; input.multiple = true;
@@ -1009,7 +1030,7 @@ $('#upload-files').addEventListener('click', () => {
   input.click();
 });
 
-$('#upload-zip').addEventListener('click', () => {
+$('#upload-zip')?.addEventListener('click', () => {
   if (!state.workspaceId) return toast('Select a workspace first', 'err');
   const input = document.createElement('input');
   input.type = 'file'; input.accept = '.zip,application/zip';
@@ -1028,14 +1049,14 @@ $('#upload-zip').addEventListener('click', () => {
   input.click();
 });
 
-$('#download-zip').addEventListener('click', () => {
+$('#download-zip')?.addEventListener('click', () => {
   if (!state.workspaceId) return toast('Select a workspace first', 'err');
   window.location.href = `/api/workspaces/${state.workspaceId}/zip`;
 });
 
 /* ---------------- Inspector actions ---------------- */
 
-$('#btn-diff').addEventListener('click', async () => {
+$('#btn-diff')?.addEventListener('click', async () => {
   if (!state.workspaceId) return toast('Select a workspace', 'err');
   try {
     const res = await fetch(`/api/github/${state.workspaceId}/diff`, { credentials: 'same-origin' });
@@ -1044,8 +1065,8 @@ $('#btn-diff').addEventListener('click', async () => {
   } catch (err) { $('#terminal').textContent = err.message; }
 });
 
-$('#btn-test').addEventListener('click', () => runAction('test'));
-$('#btn-build').addEventListener('click', () => runAction('build'));
+$('#btn-test')?.addEventListener('click', () => runAction('test'));
+$('#btn-build')?.addEventListener('click', () => runAction('build'));
 
 $('#clear-terminal')?.addEventListener('click', () => { $('#terminal').textContent = ''; });
 
@@ -2344,15 +2365,38 @@ async function pollHealth() {
 /* ---------------- Bootstrap ---------------- */
 
 async function bootstrap() {
-  await checkSession();
-  await loadModels();
-  await pollHealth();
-  setInterval(pollHealth, 15000);
-  updateComposerState();
-  autoGrow();
+  try {
+    await checkSession();
+  } catch (err) {
+    console.error('checkSession failed', err);
+    showLogin();
+  }
+  try {
+    await loadModels();
+  } catch (err) {
+    console.warn('loadModels failed', err);
+  }
+  try {
+    await pollHealth();
+    setInterval(pollHealth, 15000);
+  } catch (err) {
+    console.warn('pollHealth failed', err);
+  }
+  try {
+    updateComposerState();
+    autoGrow();
+  } catch {}
+  hideBootLoader();
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('bootstrap failed', err);
+  showLogin();
+  hideBootLoader();
+});
+
+window.addEventListener('error', () => hideBootLoader());
+window.addEventListener('unhandledrejection', () => hideBootLoader());
 
 /* ---------------- Version history (snapshots) ---------------- */
 async function refreshSnapshots() {

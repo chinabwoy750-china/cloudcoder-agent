@@ -7,12 +7,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Universal Modder — AI Web App Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M10 8l-6 8 6 8M22 8l6 8-6 8M19 5l-6 22' stroke='%237c9eff' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/styles.css" />
+<style id="boot-critical">
+  html,body{margin:0;height:100%;background:#08090d;color:#edf1ff;font-family:Inter,system-ui,sans-serif}
+  #boot-loader{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#08090d}
+  #boot-loader.done{display:none!important}
+  .boot-spin{width:40px;height:40px;border-radius:50%;border:3px solid rgba(124,158,255,.2);border-top-color:#7c9eff;animation:bootspin .8s linear infinite}
+  @keyframes bootspin{to{transform:rotate(360deg)}}
+  .boot-msg{font-size:14px;color:#9aa3b8}
+</style>
 </head>
 <body>
 
+<div id="boot-loader" role="status" aria-live="polite">
+  <div class="boot-spin" aria-hidden="true"></div>
+  <div class="boot-msg">Starting Universal Modder…</div>
+</div>
+
 <!-- ================= LOGIN ================= -->
-<div id="login" class="login hidden">
+<div id="login" class="login">
   <div class="login-bg" aria-hidden="true"></div>
   <form id="login-form" class="login-card">
     <div class="login-brand">
@@ -687,6 +701,19 @@
   </div>
   <div id="toasts" class="toasts" aria-live="assertive"></div>
 
-<script src="/app.js" type="module"></script>
+<script>
+  // If the module never boots, surface login instead of a black screen
+  window.__umBootTimer = setTimeout(function () {
+    var boot = document.getElementById('boot-loader');
+    var login = document.getElementById('login');
+    var app = document.getElementById('app');
+    if (boot) boot.classList.add('done');
+    if (login) login.classList.remove('hidden');
+    if (app) app.classList.add('hidden');
+    var msg = document.querySelector('#boot-loader .boot-msg');
+    if (msg) msg.textContent = 'Taking longer than usual…';
+  }, 8000);
+</script>
+<script src="/app.js" type="module" onerror="document.getElementById('boot-loader')?.classList.add('done');document.getElementById('login')?.classList.remove('hidden');document.querySelector('#login-error')&&(document.querySelector('#login-error').textContent='Failed to load app.js');"></script>
 </body>
 </html>

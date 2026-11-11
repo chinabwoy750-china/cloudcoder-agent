@@ -3629,3 +3629,48 @@ html[data-dashboard-bg="minimal"] .home-glow {
     display: none !important;
   }
 }
+
+/* Boot loader + never-blank login */
+#boot-loader.done { display: none !important; }
+.login {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #08090d;
+  color: #edf1ff;
+}
+.login.hidden { display: none !important; }
+.login-card {
+  width: min(400px, 92vw);
+  padding: 28px 24px;
+  border-radius: 20px;
+  background: rgba(22, 24, 32, 0.96);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+.login-card h1 { color: #fff; margin: 8px 0 4px; font-size: 22px; }
+.login-card .muted { color: #9aa3b8; }
+.login-card .field span { color: #c5cbe0; }
+.login-card input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 15px;
+}
+.login-card .primary-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #7c9eff, #a78bfa);
+  color: #0b1020;
+  font-weight: 700;
+  cursor: pointer;
+}
+.login-card .error { color: #ff8f8f; min-height: 1.2em; margin-top: 10px; }
