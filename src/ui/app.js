@@ -278,10 +278,6 @@ function updateEmptyStateVisibility() {
 
 /* ---- Workspace layout: simple flex, full viewport ---- */
 
-function isDesktopStudio() {
-  return (window.innerWidth || 0) >= 900;
-}
-
 function layoutWorkspacePanes() {
   let tag = document.getElementById('um-force-layout');
   if (!tag) {
