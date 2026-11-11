@@ -126,10 +126,16 @@ function renderMarkdown(text) {
       );
     }
     let t = escapeHtml(p.v);
+    t = t.replace(/^### (.+)$/gm, '<h4 class="md-h">$1</h4>');
+    t = t.replace(/^## (.+)$/gm, '<h3 class="md-h">$1</h3>');
+    t = t.replace(/^# (.+)$/gm, '<h2 class="md-h">$1</h2>');
     t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>');
     t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     t = t.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    t = t.replace(/^\s*[-*] (.+)$/gm, '<div class="md-li">• $1</div>');
+    t = t.replace(/^\s*\d+\. (.+)$/gm, '<div class="md-li">$1</div>');
     t = t.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    t = t.replace(/\n{2,}/g, '<br><br>');
     t = t.replace(/\n/g, '<br>');
     return t;
   }).join('');
@@ -856,7 +862,8 @@ function renderSidebarProjects() {
   for (const w of shown) {
     const li = document.createElement('li');
     li.className = 'clickable' + (w.id === state.workspaceId ? ' active' : '');
-    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${w.files ?? 0} files</span>`;
+    const fc = Number(w.files ?? 0);
+    li.innerHTML = `<span class="workspace-name">${escapeHtml(w.name || w.id)}</span><span class="workspace-subtitle">${fc === 1 ? '1 file' : `${fc} files`}</span>`;
     li.addEventListener('click', () => selectWorkspace(w.id));
     ul.appendChild(li);
   }
@@ -1116,9 +1123,25 @@ function addMessage(role, text, { html = false, skipSave = false, durationMs = n
   if (durationMs != null) wrap.dataset.durationMs = String(durationMs);
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
+  const rawText = String(text || '');
+  const isErrorMsg = (role === 'tool' || role === 'agent') && /(?:^|\b)(?:error|failed|exception)\b|\b(?:401|403|500)\b/i.test(rawText);
+  if (isErrorMsg) {
+    wrap.classList.add('msg-error');
+    bubble.classList.add('bubble-error');
+  }
   if (html) bubble.innerHTML = text;
-  else if (role === 'agent') bubble.innerHTML = renderMarkdown(text);
+  else if (isErrorMsg) {
+    bubble.innerHTML = `<div class="error-banner"><span class="error-icon" aria-hidden="true">⚠</span><div><strong>Something went wrong</strong><div class="error-text">${escapeHtml(rawText)}</div></div></div>`;
+  } else if (role === 'agent') bubble.innerHTML = renderMarkdown(text);
   else bubble.textContent = text;
+
+  if (isErrorMsg) {
+    const box = $('#messages');
+    const prev = box && box.querySelector('.msg.msg-error:last-of-type .error-text');
+    if (prev && prev.textContent === rawText) {
+      return prev.closest('.msg');
+    }
+  }
   wrap.appendChild(bubble);
 
   if (role === 'agent' || role === 'user') {
@@ -2680,7 +2703,8 @@ $('#studio-publish-btn')?.addEventListener('click', () => {
 (function setupPaneResize() {
   const root = document.documentElement;
   const storedNav = Number(localStorage.getItem('um_nav_w') || 260);
-  const storedStudio = Number(localStorage.getItem('um_studio_w') || Math.round(window.innerWidth * 0.4));
+  let storedStudio = Number(localStorage.getItem('um_studio_w') || 0);
+  if (!storedStudio || storedStudio < 280 || storedStudio > window.innerWidth * 0.7) storedStudio = Math.round(window.innerWidth * 0.45);
   root.style.setProperty('--nav-w', `${Math.min(360, Math.max(200, storedNav))}px`);
   root.style.setProperty('--studio-w', `${Math.min(window.innerWidth * 0.55, Math.max(320, storedStudio))}px`);
 
