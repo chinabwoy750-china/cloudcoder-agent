@@ -3989,3 +3989,36 @@ html[data-dashboard-bg="minimal"] .home-glow {
     display: none !important;
   }
 }
+
+/* Mobile workspace: always show hamburger to open nav */
+@media (max-width: 900px) {
+  body.shell-workspace-active .workspace-topbar {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+  body.shell-workspace-active #workspace-menu-btn,
+  body.shell-workspace-active .workspace-menu-btn {
+    display: inline-flex !important;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06);
+    color: #edf1ff;
+    flex: 0 0 auto;
+  }
+  body.shell-workspace-active .workspace-topbar .topbar-x {
+    display: inline-flex !important; /* keep close/home */
+  }
+  body.shell-workspace-active #shell-workspace > .sidebar {
+    z-index: 90 !important;
+  }
+  body.shell-workspace-active #scrim.visible {
+    z-index: 80 !important;
+  }
+}
+@media (min-width: 901px) {
+  #workspace-menu-btn { display: none !important; }
+}

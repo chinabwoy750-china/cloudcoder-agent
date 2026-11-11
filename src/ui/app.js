@@ -316,6 +316,40 @@ function layoutWorkspacePanes() {
         flex-direction: column !important;
         overflow: hidden !important;
       }
+      /* Nav drawer on mobile — hidden until .open */
+      body.shell-workspace-active #shell-workspace > .sidebar {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        width: min(300px, 86vw) !important;
+        height: 100% !important;
+        max-height: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        transform: translateX(-105%) !important;
+        transition: transform .24s cubic-bezier(.32,.72,0,1) !important;
+        z-index: 90 !important;
+        background: #10131a !important;
+        box-shadow: none !important;
+        overflow: auto !important;
+      }
+      body.shell-workspace-active #shell-workspace > .sidebar.open {
+        transform: translateX(0) !important;
+        box-shadow: 12px 0 40px rgba(0,0,0,.55) !important;
+      }
+      body.shell-workspace-active #scrim.visible {
+        display: block !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        z-index: 80 !important;
+      }
+      body.shell-workspace-active #workspace-menu-btn,
+      body.shell-workspace-active .workspace-menu-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
       body.shell-workspace-active #shell-workspace > #studio-panel,
       body.shell-workspace-active #shell-workspace > .studio-panel,
       body.shell-workspace-active #resizer-nav,
@@ -875,6 +909,12 @@ function openInspector() {
   document.body.classList.add('drawer-open');
 }
 $('#menu-btn')?.addEventListener('click', openSidebar);
+$('#workspace-menu-btn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  openSidebar();
+});
+
 
 /* ---------------- Mobile swipe: left = nav, right = preview ---------------- */
 (function setupWorkspaceSwipes() {
@@ -901,7 +941,7 @@ $('#menu-btn')?.addEventListener('click', openSidebar);
     startY = t.clientY;
     tracking = true;
     // Prefer edge swipe for opening nav (feels native); allow full-width for preview too
-    edgeOnly = startX < 28;
+    edgeOnly = startX < Math.min(72, window.innerWidth * 0.25);
   }
 
   function onMove(e) {
