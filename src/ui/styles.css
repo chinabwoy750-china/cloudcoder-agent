@@ -144,10 +144,11 @@ input:focus, textarea:focus, select:focus {
    APP SHELL
    ============================================================ */
 .app {
-  display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 300px;
-  grid-template-rows: 1fr;
-  height: 100%; height: 100dvh;
+  display: block;
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
   background: var(--bg);
 }
 .mobile-only { display: none !important; }
@@ -1513,15 +1514,18 @@ body.shell-projects-active .project-thumb {
 
 /* Workspace desktop: classic 3-pane studio */
 body.shell-workspace-active .app {
-  display: grid !important;
-  grid-template-columns: 260px minmax(0, 1fr) 300px;
-  grid-template-rows: 1fr;
+  display: block !important;
   height: 100dvh;
   overflow: hidden;
   padding-bottom: 0;
 }
 body.shell-workspace-active #shell-workspace {
-  display: contents; /* children participate in app grid */
+  display: grid !important;
+  grid-template-columns: minmax(220px, var(--nav-w, 260px)) 6px minmax(320px, 1fr) 6px minmax(300px, var(--studio-w, 40vw));
+  grid-template-rows: 1fr;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
 }
 body.shell-workspace-active .sidebar {
   display: flex;
@@ -2333,7 +2337,7 @@ html[data-dashboard-bg="minimal"] .home-glow {
     background: #07080c;
   }
   body.shell-workspace-active #shell-workspace {
-    display: contents !important;
+    display: grid !important;
   }
   body.shell-workspace-active .sidebar {
     grid-column: 1;
@@ -2957,7 +2961,7 @@ html[data-dashboard-bg="minimal"] .home-glow {
     background: #090a0e !important;
   }
   body.shell-workspace-active #shell-workspace {
-    display: contents !important;
+    display: grid !important;
   }
   body.shell-workspace-active .sidebar {
     grid-column: 1 !important;
@@ -3275,7 +3279,7 @@ html[data-dashboard-bg="minimal"] .home-glow {
 
   /* Promote shell children into the app grid */
   body.shell-workspace-active #shell-workspace {
-    display: contents !important;
+    display: grid !important;
   }
 
   /* Hide everything that must NOT take a grid track */
@@ -3592,6 +3596,36 @@ html[data-dashboard-bg="minimal"] .home-glow {
   body.shell-workspace-active #resizer-studio,
   body.shell-workspace-active #studio-panel,
   body.shell-workspace-active .studio-panel {
+    display: none !important;
+  }
+}
+
+
+/* ===== Desktop blank-screen fix: home & projects fill the screen ===== */
+@media (min-width: 901px) {
+  .app {
+    display: block !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+  #shell-home.shell-home,
+  #shell-projects.shell-projects {
+    display: block;
+    width: 100%;
+    height: 100dvh;
+    overflow: auto;
+  }
+  #shell-home.hidden,
+  #shell-projects.hidden {
+    display: none !important;
+  }
+  /* When on home/projects, never leave empty grid tracks */
+  body:not(.shell-workspace-active) .app {
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+  body:not(.shell-workspace-active) #shell-workspace {
     display: none !important;
   }
 }
