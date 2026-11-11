@@ -251,6 +251,98 @@ function updateEmptyStateVisibility() {
 }
 
 
+
+/* ---- Force workspace panes to fill the real viewport (JS, not CSS wars) ---- */
+function layoutWorkspacePanes() {
+  const shell = document.getElementById('shell-workspace');
+  if (!shell) return;
+  if (state.shell !== 'workspace' || shell.classList.contains('hidden')) {
+    return;
+  }
+
+  const sidebar = shell.querySelector(':scope > .sidebar');
+  const main = shell.querySelector(':scope > .main');
+  const studio = shell.querySelector(':scope > #studio-panel') || shell.querySelector(':scope > .studio-panel');
+  const resNav = document.getElementById('resizer-nav');
+  const resStudio = document.getElementById('resizer-studio');
+  const inspector = shell.querySelector(':scope > .inspector');
+  const chat = document.getElementById('view-chat');
+  const mobilePreview = document.getElementById('preview-view');
+
+  const w = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
+  const h = Math.max(480, window.innerHeight || document.documentElement.clientHeight || 0);
+
+  if (inspector) {
+    inspector.style.cssText = 'display:none !important; width:0 !important; height:0 !important; overflow:hidden !important;';
+  }
+
+  // Mobile / narrow: single column chat, no side preview strip
+  if (w < 901) {
+    shell.style.cssText = `display:flex !important; flex-direction:column !important; width:${w}px !important; max-width:${w}px !important; height:${h}px !important; position:relative !important; overflow:hidden !important; margin:0 !important; padding:0 !important;`;
+    if (sidebar) {
+      // leave transform/open state to CSS classes; only clear desktop absolute locks
+      sidebar.style.removeProperty('left');
+      sidebar.style.removeProperty('right');
+      sidebar.style.removeProperty('width');
+      sidebar.style.removeProperty('height');
+      sidebar.style.removeProperty('top');
+      sidebar.style.removeProperty('bottom');
+      sidebar.style.position = '';
+    }
+    if (main) {
+      main.style.cssText = `display:flex !important; flex-direction:column !important; flex:1 1 auto !important; width:${w}px !important; max-width:${w}px !important; min-height:0 !important; position:relative !important; left:auto !important; right:auto !important; top:auto !important; bottom:auto !important; overflow:hidden !important;`;
+    }
+    if (studio) studio.style.cssText = 'display:none !important;';
+    if (resNav) resNav.style.cssText = 'display:none !important;';
+    if (resStudio) resStudio.style.cssText = 'display:none !important;';
+    if (chat) {
+      chat.classList.remove('hidden');
+      chat.style.cssText = 'display:flex !important; flex-direction:column !important; flex:1 1 auto !important; min-height:0 !important;';
+    }
+    return;
+  }
+
+  // Desktop: exact pixel panes that sum to 100% of the window
+  const navW = 260;
+  const gutter = 6;
+  const rest = Math.max(400, w - navW - gutter * 2);
+  const chatW = Math.floor(rest * 0.4);
+  const prevW = rest - chatW;
+  const chatLeft = navW + gutter;
+  const prevLeft = chatLeft + chatW + gutter;
+
+  shell.style.cssText = `display:block !important; position:relative !important; width:${w}px !important; max-width:${w}px !important; height:${h}px !important; overflow:hidden !important; margin:0 !important; padding:0 !important;`;
+
+  if (sidebar) {
+    sidebar.style.cssText = `position:absolute !important; left:0 !important; top:0 !important; width:${navW}px !important; height:${h}px !important; display:flex !important; flex-direction:column !important; transform:none !important; z-index:3 !important; overflow:auto !important;`;
+    sidebar.classList.add('open');
+  }
+  if (resNav) {
+    resNav.style.cssText = `position:absolute !important; left:${navW}px !important; top:0 !important; width:${gutter}px !important; height:${h}px !important; display:block !important; z-index:5 !important; cursor:col-resize !important;`;
+  }
+  if (main) {
+    main.style.cssText = `position:absolute !important; left:${chatLeft}px !important; top:0 !important; width:${chatW}px !important; height:${h}px !important; display:flex !important; flex-direction:column !important; overflow:hidden !important; z-index:2 !important;`;
+  }
+  if (resStudio) {
+    resStudio.style.cssText = `position:absolute !important; left:${chatLeft + chatW}px !important; top:0 !important; width:${gutter}px !important; height:${h}px !important; display:block !important; z-index:5 !important; cursor:col-resize !important;`;
+  }
+  if (studio) {
+    studio.style.cssText = `position:absolute !important; left:${prevLeft}px !important; top:0 !important; width:${prevW}px !important; height:${h}px !important; display:flex !important; flex-direction:column !important; overflow:hidden !important; z-index:2 !important;`;
+  }
+  if (chat) {
+    chat.classList.remove('hidden');
+    chat.style.cssText = 'display:flex !important; flex-direction:column !important; flex:1 1 auto !important; min-height:0 !important; height:100% !important;';
+  }
+  if (mobilePreview) mobilePreview.style.cssText = 'display:none !important;';
+
+  // Ensure studio inner glass fills
+  const glass = studio?.querySelector('.studio-glass');
+  if (glass) glass.style.cssText = 'display:flex;flex-direction:column;height:100%;min-height:0;';
+  const body = studio?.querySelector('.studio-body');
+  if (body) body.style.cssText = 'flex:1 1 auto;min-height:0;';
+}
+
+
 function setShell(name) {
   state.shell = name;
   const home = $('#shell-home');
@@ -268,6 +360,8 @@ function setShell(name) {
   document.querySelectorAll('.bottom-nav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.shell === name);
   });
+  requestAnimationFrame(() => layoutWorkspacePanes());
+
   // Preview / inspector only belong to workspace shell
   document.querySelectorAll('.workspace-only').forEach((el) => {
     el.classList.toggle('hidden', name !== 'workspace');
@@ -2417,6 +2511,10 @@ bootstrap().catch((err) => {
   showLogin();
   hideBootLoader();
 });
+
+window.addEventListener('resize', () => layoutWorkspacePanes());
+window.addEventListener('orientationchange', () => setTimeout(layoutWorkspacePanes, 150));
+
 
 window.addEventListener('error', () => hideBootLoader());
 window.addEventListener('unhandledrejection', () => hideBootLoader());
