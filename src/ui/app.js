@@ -290,10 +290,30 @@ function layoutWorkspacePanes() {
     return;
   }
 
+  // Independent toggles: nav only affects nav, preview only affects preview.
+  // Both off => chat pane fills the workspace.
   const navOn = state.navPaneVisible !== false;
   const previewOn = state.previewPaneVisible !== false;
   document.body.classList.toggle('nav-pane-collapsed', !navOn);
   document.body.classList.toggle('preview-pane-collapsed', !previewOn);
+
+  // Keep topbar reopen controls in sync
+  const reopenNav = $('#reopen-nav-pane');
+  const reopenPrev = $('#reopen-preview-pane');
+  if (reopenNav) {
+    reopenNav.classList.toggle('hidden', navOn);
+    reopenNav.setAttribute('aria-pressed', navOn ? 'true' : 'false');
+  }
+  if (reopenPrev) {
+    reopenPrev.classList.toggle('hidden', previewOn);
+    reopenPrev.setAttribute('aria-pressed', previewOn ? 'true' : 'false');
+  }
+  const topPrev = $('#preview-toggle');
+  if (topPrev) topPrev.setAttribute('aria-pressed', previewOn ? 'true' : 'false');
+  const navBtn = $('#toggle-nav-pane');
+  if (navBtn) navBtn.setAttribute('aria-pressed', navOn ? 'true' : 'false');
+  const prevBtn = $('#toggle-preview-pane');
+  if (prevBtn) prevBtn.setAttribute('aria-pressed', previewOn ? 'true' : 'false');
 
   const w = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
   if (w < 900) {
@@ -318,41 +338,58 @@ function layoutWorkspacePanes() {
     return;
   }
 
-  // Desktop: resizable 3-pane grid. Resizers stay visible when their pane is on.
-  const navCol = navOn ? 'minmax(200px, var(--nav-w, 260px)) 6px' : '0 0';
-  const studioCol = previewOn ? '6px minmax(280px, var(--studio-w, 42vw))' : '0 0';
+  // Build grid tracks only for visible panes (no zero-width leftovers).
+  const cols = [];
+  if (navOn) cols.push('minmax(200px, var(--nav-w, 260px))', '6px');
+  cols.push('minmax(280px, 1fr)'); // chat always present
+  if (previewOn) cols.push('6px', 'minmax(280px, var(--studio-w, 42vw))');
+
+  // Assign explicit grid-column numbers based on visibility
+  let col = 1;
+  const navCol = navOn ? col++ : 0;
+  const navResCol = navOn ? col++ : 0;
+  const chatCol = col++;
+  const studioResCol = previewOn ? col++ : 0;
+  const studioCol = previewOn ? col++ : 0;
+
   tag.textContent = `
     body.shell-workspace-active #shell-workspace {
       display: grid !important;
-      grid-template-columns: ${navCol} minmax(280px, 1fr) ${studioCol} !important;
+      grid-template-columns: ${cols.join(' ')} !important;
       grid-template-rows: 100dvh !important;
       width: 100vw !important; height: 100dvh !important; overflow: hidden !important;
     }
     body.shell-workspace-active #shell-workspace > .sidebar {
       position: relative !important; transform: none !important;
-      height: 100% !important; display: ${navOn ? 'flex' : 'none'} !important;
-      min-width: 0 !important;
+      height: 100% !important; min-width: 0 !important;
+      display: ${navOn ? 'flex' : 'none'} !important;
+      ${navOn ? `grid-column: ${navCol} !important;` : ''}
     }
     body.shell-workspace-active #shell-workspace > #resizer-nav {
       display: ${navOn ? 'block' : 'none'} !important;
       width: 6px !important; cursor: col-resize !important;
+      ${navOn ? `grid-column: ${navResCol} !important;` : ''}
     }
     body.shell-workspace-active #shell-workspace > .main {
       position: relative !important;
       left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
       display: flex !important; flex-direction: column !important; overflow: hidden !important;
       min-width: 0 !important;
+      grid-column: ${chatCol} !important;
     }
     body.shell-workspace-active #shell-workspace > #resizer-studio {
       display: ${previewOn ? 'block' : 'none'} !important;
       width: 6px !important; cursor: col-resize !important;
+      ${previewOn ? `grid-column: ${studioResCol} !important;` : ''}
     }
     body.shell-workspace-active #shell-workspace > #studio-panel,
     body.shell-workspace-active #shell-workspace > .studio-panel {
       position: relative !important;
       left: auto !important; right: auto !important; width: auto !important; height: 100% !important;
-      display: ${previewOn ? 'flex' : 'none'} !important; flex-direction: column !important; overflow: hidden !important;
       min-width: 0 !important;
+      display: ${previewOn ? 'flex' : 'none'} !important;
+      flex-direction: column !important; overflow: hidden !important;
+      ${previewOn ? `grid-column: ${studioCol} !important;` : ''}
     }
     body.shell-workspace-active #shell-workspace > #inspector { display: none !important; }
     body.shell-workspace-active #view-chat,
@@ -360,6 +397,9 @@ function layoutWorkspacePanes() {
       display: flex !important; flex: 1 1 auto !important; min-height: 0 !important;
       height: 100% !important; flex-direction: column !important;
     }
+    /* Always show chat topbar reopen buttons when a pane is hidden */
+    body.shell-workspace-active #reopen-nav-pane { display: ${navOn ? 'none' : 'inline-flex'} !important; }
+    body.shell-workspace-active #reopen-preview-pane { display: ${previewOn ? 'none' : 'inline-flex'} !important; }
   `;
 }
 
@@ -367,17 +407,11 @@ function setNavPaneVisible(on) {
   state.navPaneVisible = Boolean(on);
   try { localStorage.setItem('um_nav_pane', state.navPaneVisible ? '1' : '0'); } catch {}
   layoutWorkspacePanes();
-  const btn = $('#toggle-nav-pane');
-  if (btn) btn.setAttribute('aria-pressed', state.navPaneVisible ? 'true' : 'false');
 }
 function setPreviewPaneVisible(on) {
   state.previewPaneVisible = Boolean(on);
   try { localStorage.setItem('um_preview_pane', state.previewPaneVisible ? '1' : '0'); } catch {}
   layoutWorkspacePanes();
-  const btn = $('#toggle-preview-pane');
-  if (btn) btn.setAttribute('aria-pressed', state.previewPaneVisible ? 'true' : 'false');
-  const top = $('#preview-toggle');
-  if (top) top.setAttribute('aria-pressed', state.previewPaneVisible ? 'true' : 'false');
 }
 
 function setShell(name) {
@@ -2944,6 +2978,8 @@ $('#studio-publish-btn')?.addEventListener('click', () => {
   } catch {}
   $('#toggle-nav-pane')?.addEventListener('click', () => setNavPaneVisible(!state.navPaneVisible));
   $('#toggle-preview-pane')?.addEventListener('click', () => setPreviewPaneVisible(!state.previewPaneVisible));
+  $('#reopen-nav-pane')?.addEventListener('click', () => setNavPaneVisible(true));
+  $('#reopen-preview-pane')?.addEventListener('click', () => setPreviewPaneVisible(true));
   // Topbar preview button also restores/hides desktop studio pane
   const prevToggle = $('#preview-toggle');
   if (prevToggle) {
